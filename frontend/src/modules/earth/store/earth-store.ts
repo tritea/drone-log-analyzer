@@ -7,6 +7,7 @@ import { wgs84ToGcj02, gcj02ToWgs84 } from '@/modules/shared/utils/geo/gcj02'
 import { resolveDroneModelName, pwmToAngularVelocity } from '@/modules/shared/utils/drone-model'
 import { createTerrariumTerrainProvider } from '@/modules/earth/renderer/terrain-provider'
 import { measureGlbBox } from '@/modules/earth/renderer/glb-box'
+import { getLowpolyGlbUrl, disposeLowpolyGlbCache } from '@/modules/earth/renderer/lowpoly-glb'
 import { useCurveManagerStore } from '@/modules/curves'
 import { TRAJ_MAX_POINTS, THREE_UNITS_PER_METER, THREE_PROPELLER_ORDER, THREE_PROPELLER_ACCEL_TAU, THREE_PROPELLER_DECEL_TAU } from '@/constants'
 import { useUiStore } from '@/modules/shared/ui-store'
@@ -27,6 +28,8 @@ const LOCK_RANGE_MIN = 5
 const LOCK_RANGE_MAX = 20000
 // GLB 机头轴与 Cesium heading 参考差约 90°（实测"多了 90 度"），补偿之；若整体方向反了改 +Math.PI/2。
 const DRONE_HEADING_OFFSET = -Math.PI / 2
+// vendor/ 下有真实 GLB 的机型；其余机型（HEXA-X/OCTO-X 等）按真实轴数程序化生成 lowpoly GLB。
+const VENDOR_DRONE_MODELS = new Set(['QUAD-X', 'VTOL'])
 
 const EMPTY_CARTESIANS: Cesium.Cartesian3[] = []
 
@@ -324,6 +327,7 @@ export const useEarthStore = defineStore('earth', () => {
     flownEndIdx = -1
     lastModelsKey = ''
     lastTilesetsKey = ''
+    disposeLowpolyGlbCache()
   }
 
 
@@ -447,20 +451,18 @@ export const useEarthStore = defineStore('earth', () => {
   }
 
 
-  function droneModelUri(name: string): string {
-    return 'vendor/' + (name === 'VTOL' ? 'VTOL' : 'QUAD-X') + '.glb'
-  }
-
-  function rebuildDroneEntity(rt: EarthRuntime, name: string): void {
-    // 清理旧 GLB 实体。
-    if (rt.droneEntity) {
-      rt.viewer.entities.remove(rt.droneEntity)
-      rt.droneEntity = null
-    }
+  async function rebuildDroneEntity(rt: EarthRuntime, name: string): Promise<void> {
+    // 入口立即标记机型名：既作 render 循环守卫（updateEarthLive 里 rt.droneModelName !== modelName），
+    // 又作 await 后 stale 守卫（快速切机型时旧 rebuild 自动退出，不建孤儿 entity）。
+    rt.droneModelName = name
+    // 模型形态复用「地图无人机模型」设置（与 map-3d 共享 map.droneModel）：
+    //   lowpoly：所有机型程序化（含 QUAD-X/VTOL）；glb：有 vendor GLB 用之，无则 lowpoly 回退（尽量精细）。
+    // 记入 rt.droneModelMode，既作 render 循环守卫，又作 await 后 stale 守卫（快速切形态时旧 rebuild 退出）。
+    const droneMode = useMapStateStore().map.droneModel === 'glb' ? 'glb' : 'lowpoly'
+    rt.droneModelMode = droneMode
     // 桨叶配置：机型→桨序，取 name/dir/func；angles/omegas 清零。
-    // 非 VTOL 一律按 QUAD-X 桨序（GLB 只有 QUAD-X/VTOL，HEXA/OCTO 占位）。
-    const orderName = name === 'VTOL' ? 'VTOL' : 'QUAD-X'
-    const cfg = THREE_PROPELLER_ORDER[orderName] ?? THREE_PROPELLER_ORDER['QUAD-X']!
+    // 用真实机型名取桨序（HEXA-X/OCTO-X 已在 THREE_PROPELLER_ORDER 定义，不再压成 QUAD-X）。
+    const cfg = THREE_PROPELLER_ORDER[name] ?? THREE_PROPELLER_ORDER['QUAD-X']!
     rt.propellerNodes = cfg.map((p) => p.name)
     rt.propellerDirs = cfg.map((p) => p.dir)
     rt.propellerFuncs = cfg.map((p, i) => (p.func != null ? p.func : 33 + i))
@@ -468,9 +470,26 @@ export const useEarthStore = defineStore('earth', () => {
     rt.propellerOmegas = cfg.map(() => 0)
     rt.propellerLastTick = 0
 
+    // uri 解析：lowpoly 形态（或 glb 形态下无 vendor GLB 的机型）→ 按真实轴数程序化生成 lowpoly GLB（blob URL）；
+    // glb 形态且有 vendor GLB（QUAD-X/VTOL）→ 用真实 GLB。导出失败兜底 QUAD-X.glb（保证飞行器始终可见）。
+    const wantLowpoly = droneMode === 'lowpoly' || !VENDOR_DRONE_MODELS.has(name)
+    let uri: string
+    try {
+      uri = wantLowpoly ? await getLowpolyGlbUrl(name) : 'vendor/' + name + '.glb'
+    } catch (err) {
+      console.error('[earth] lowpoly GLB 导出失败，回退 QUAD-X.glb:', name, err)
+      uri = 'vendor/QUAD-X.glb'
+    }
+    // stale 守卫：await 期间 earth 已 dispose、机型已变、或形态已切 → 放弃（旧 entity 仍在，无闪烁、不重复建孤儿）。
+    if (rt !== runtime.earthView || rt.droneModelName !== name || rt.droneModelMode !== droneMode) return
+    // 推迟清理旧 entity 到 await 之后：await 期间旧 entity 保留可见，且 !droneEntity 不为真（render 不重复触发）。
+    if (rt.droneEntity) {
+      rt.viewer.entities.remove(rt.droneEntity)
+      rt.droneEntity = null
+    }
+
     // GLB 模型：nodeTransformations 对桨叶节点施加绕本地 Y 的旋转（GLB 节点 rotation=identity，转轴即 Y）；
     // ModelGraphics.nodeTransformations 是 PropertyBag，rotation 用 CallbackProperty 每帧读累积角度返回四元数。
-    const uri = droneModelUri(name)
     const nodeTransformations: Record<string, Cesium.TranslationRotationScale> = {}
     for (let i = 0; i < cfg.length; i++) {
       const idx = i
@@ -498,7 +517,6 @@ export const useEarthStore = defineStore('earth', () => {
     rt.droneBaseScale = 0
     rt.droneLiftPerScale = 0
     void measureDroneMetrics(rt, uri, name)
-    rt.droneModelName = name
     // 挂 preRender 推进桨叶角度（仅挂一次，viewer 生命周期内复用；disposeEarth 时移除）：
     // nodeTransformations 的 CallbackProperty 每帧读 rt.propellerAngles，spinEarthPropellers 用真实 PWM 推进它。
     if (!rt.removePropRender) {
@@ -1119,8 +1137,10 @@ export const useEarthStore = defineStore('earth', () => {
 
     const summary = useLogStore().log.summary
     const modelName = resolveDroneModelName(summary?.frame, summary?.airframe)
-    if (!rt.droneEntity || rt.droneModelName !== modelName) {
-      rebuildDroneEntity(rt, modelName)
+    const droneMode = useMapStateStore().map.droneModel === 'glb' ? 'glb' : 'lowpoly'
+    if ((!rt.droneEntity && !rt.droneModelInFlight) || rt.droneModelName !== modelName || rt.droneModelMode !== droneMode) {
+      rt.droneModelInFlight = true
+      void rebuildDroneEntity(rt, modelName).finally((): void => { rt.droneModelInFlight = false })
     }
 
     const cmdStore = useCommandsStore()

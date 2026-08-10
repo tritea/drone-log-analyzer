@@ -149,6 +149,11 @@ export interface EarthRuntime {
   viewer: Cesium.Viewer;
   droneEntity: Cesium.Entity | null;
   droneModelName: string;
+  // 模型重建 in-flight 标志：rebuildDroneEntity 是 async，await lowpoly GLB 导出期间置 true，
+  // 防止 render 循环在「同机型首次冷缓存」时每帧重复触发（droneEntity 此时仍为 null）。
+  droneModelInFlight?: boolean;
+  // 当前模型形态（'glb'|'lowpoly'）：与 map.droneModel 同步，用于检测形态切换触发重建 + await 后 stale 守卫。
+  droneModelMode?: string;
   // GLB 原生尺寸归一化（对齐 map-3d 的「真实物理尺寸」渲染）：droneModelUri 为本次测量的 uri（换模型/dispose 失效用），
   // droneBaseScale = physBase/maxDim（droneScale=1 时让模型 ≈ 1.5m/1.7m 的缩放，0=未量完→effectiveScale=0 仅 minimumPixelSize 兜底），
   // droneLiftPerScale = max(0,-minY)×baseScale（droneScale=1 时的 halfH 抬升，让模型坐落不陷地）。
