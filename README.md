@@ -104,7 +104,7 @@ make check
 - [docs/frontend.md](docs/frontend.md) — 前端目录、setup store、传输 client、3D/地图/chart、profile
 - [docs/api.md](docs/api.md) — 接口/绑定/路由字段
 - [docs/map-tiles.md](docs/map-tiles.md) — 瓦片 provider / MBTiles 缓存管线
-- [skills/web-vue-standards](skills/web-vue-standards/SKILL.md) — 前端编码规范（Vue/Pinia/TS）
+- [skills/vue-stand](skills/vue-stand/SKILL.md) — 前端编码规范（Vue/Pinia/TS）
 - [skills/frontend-3d-map](skills/frontend-3d-map/SKILL.md) — 3D/MapLibre 渲染硬核规则
 
 > 开发约束（模块边界、禁止行为、不变量）见 [AGENTS.md](AGENTS.md)。

@@ -14,7 +14,7 @@
 | 前端目录、setup store、传输 client、3D/地图/chart、profile | [docs/frontend.md](docs/frontend.md) |
 | 接口/绑定/路由字段 | [docs/api.md](docs/api.md) |
 | 瓦片 provider / MBTiles 缓存管线 | [docs/map-tiles.md](docs/map-tiles.md) |
-| 前端编码规范（Vue/Pinia/TS） | [skills/web-vue-standards](skills/web-vue-standards/SKILL.md) |
+| 前端编码规范（Vue/Pinia/TS） | [skills/vue-stand](skills/vue-stand/SKILL.md) |
 | 3D / MapLibre 渲染硬核规则 | [skills/frontend-3d-map](skills/frontend-3d-map/SKILL.md) |
 
 ## 模块边界（依赖只能自上而下）
@@ -34,7 +34,7 @@ transport  →  services  →  modules
 
 - **文件保持小**：单个文件目标几百行；接近/超过 ~800 行就拆。高内聚低耦合，按域/功能组织，不按类型堆。
 - **拆分用文件夹包裹**：拆出的多个片段放进一个**以域命名的文件夹**，而不是在同级摊一堆兄弟文件（会乱）。范例：后端 [`app/modules/parser/`](app/modules/parser)（一个域一个文件夹，内含 format/binary/text/records... 协作文件）、[`app/services/logservice/dataflash/`](app/services/logservice/dataflash)；前端 [`frontend/src/views/Home/`](frontend/src/views/Home)（`index.vue` + `components/CenterStage.vue` 等子组件）。
-- **拆不动的，靠顺序 + 命名收敛**：有些东西不便机械拆分（如一个 Pinia store 的状态/计算/函数围绕同一域，强行拆反而割裂；一个紧密的解析流程同理）。这种情况**不硬拆**，而用统一的垂直顺序与命名让它易读——前端 store 顺序见 [skills/web-vue-standards](skills/web-vue-standards/SKILL.md#大-store-靠顺序收敛不硬拆)。判断标准：拆完是否还要互相 import 大量内部细节？是 → 别拆，整理顺序。
+- **拆不动的，靠顺序 + 命名收敛**：有些东西不便机械拆分（如一个 Pinia store 的状态/计算/函数围绕同一域，强行拆反而割裂；一个紧密的解析流程同理）。这种情况**不硬拆**，而用统一的垂直顺序与命名让它易读——前端 store 顺序见 [skills/vue-stand](skills/vue-stand/SKILL.md#大-store-靠顺序收敛不硬拆)。判断标准：拆完是否还要互相 import 大量内部细节？是 → 别拆，整理顺序。
 - **类型/常量按作用域放**：**跨域共享**的类型/常量进中心位置（前端 `types/index.ts`、`constants/index.ts`；后端跨服务 DTO 在 `app/model/` 与各 service 包的 `model.go`）；**只在一个文件夹内用的**类型/常量，就地放该文件夹的 `types.ts`/`const.ts`（或域命名的 `xxxx.ts`），不要塞进中心把中心撑大、也别散到根目录。需要私有 `types.ts`/`const.ts` 的模块，本身就该是个**文件夹**。范例：前端 [`services/log/types.ts`](frontend/src/services/log/types.ts)、[`chart/types.ts`](frontend/src/chart/types.ts) 是文件夹私有类型；[`types/index.ts`](frontend/src/types/index.ts) 是跨 store 共享状态（`UiState`/`LogState`...）。
 
 ## 构建须知（务必遵守）
