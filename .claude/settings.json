@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"C:/Users/mylum/.claude/plans\" && echo \"dir ready\")",
+      "Bash(mkdir -p app/modules)",
+      "Bash(git mv *)",
+      "Bash(rmdir module *)",
+      "Bash(echo \"--- build exit: $? ---\")",
+      "Bash(node ./node_modules/vue-tsc/bin/vue-tsc.js --noEmit)"
+    ],
+    "additionalDirectories": [
+      "D:\\Program\\user_backend\\.claude\\plans"
+    ]
+  }
+}

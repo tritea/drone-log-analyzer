@@ -1,0 +1,21 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Drone-Log-Analyzer",
+  "outputfilename": "DroneLogAnalyzer",
+  "frontend:dir": ".",
+  "assetdir": "./frontend/dist",
+  "reloaddirs": "./frontend/dist",
+  "wailsjsdir": "./frontend/src",
+  "version": "2",
+  "info": {
+    "productName": "飞控日志分析",
+    "productVersion": "1.0.0",
+    "companyName": "Tritea",
+    "copyright": "Copyright © 2026 huangjian",
+    "comments": "ArduPilot Dataflash 日志分析工具"
+  },
+  "frontend:install": "npm install",
+  "frontend:build": "node node_modules/vite/bin/vite.js build",
+  "frontend:dev:watcher": "node node_modules/vite/bin/vite.js",
+  "frontend:dev:serverUrl": "http://localhost:5173"
+}

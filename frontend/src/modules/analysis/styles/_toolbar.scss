@@ -1,0 +1,95 @@
+// 顶部工具栏（ChartToolbar）专属类。
+// 已剔除旧工具栏布局残骸（.topbar-brand/.brand-name/.open-file-ico/.chart-meta/
+// .chart-stats/.stats-*/.y-control/.chart-toolbar strong/.open-file-btn span 等死规则）。
+// 跨模块共享的卡片/控件类已挪到 styles/_controls.scss。
+.chart-toolbar {
+  height: 50px;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface);
+
+  container-type: inline-size;
+}
+
+.chart-title {
+  flex-shrink: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.open-file-btn { gap: 5px; }
+
+.topbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.topbar-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chart-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.chart-hidden-count {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid #fde68a;
+  border-radius: 4px;
+  color: #92400e !important;
+  background: #fffbeb;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.chart-file-name {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--surface-soft);
+  line-height: 1;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-toolbar span {
+  color: var(--text3);
+  font-size: 12px;
+}
+
+@container (max-width: 960px) {
+  .topbar-status { display: none; }
+}
+@container (max-width: 720px) {
+  .chart-file-name { display: none; }
+}

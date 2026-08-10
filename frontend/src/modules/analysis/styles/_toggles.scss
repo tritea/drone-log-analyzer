@@ -1,0 +1,37 @@
+// 工具栏"开关"弹出层（stats-overflow-popup）内的开关项 + 事件标签色。
+// 注意：旧 .chart-stats/.stats-* 是上一代统计区布局，已废弃删除；这里只保留现用的弹出层。
+.stats-overflow-popup {
+  position: fixed;
+  z-index: 50;
+  min-width: 172px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+
+.stats-overflow-popup .chart-toggle {
+  justify-content: space-between;
+}
+
+.chart-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.event-tag {
+  font-size: 11px;
+  font-weight: 700;
+}
+.event-tag-err { color: #dc2626; }
+.event-tag-ev  { color: #059669; }
+.event-tag-msg { color: #64748b; }

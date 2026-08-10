@@ -1,0 +1,155 @@
+{
+  "skill_name": "web-vue-standards",
+  "evals": [
+    {
+      "id": 1,
+      "name": "create-pinia-store",
+      "prompt": "帮我加一个 Pinia store 来管理「标注书签」列表。需要从后端拉取列表、支持删除单个书签。书签有 id/title/timeMs 三个字段。请按项目现有的 store 写法来，放在 frontend/src/stores/ 下。",
+      "expected_output": "在 frontend/src/stores/ 下新建一个 **setup store** 文件：\n1. defineStore('bookmarks', () => {...}) setup 写法（不是 Options Store，没有 state/getters/actions 键）\n2. state 用 reactive() 放一个以域命名的顶层对象（如 bookmarks），并用 as XxxState 挂类型（类型引用 @/types）\n3. loadXxx / removeXxx 是普通 async 函数，直接读写闭包里的 reactive 对象（没有 this，不需要 const self = this）\n4. 通过 services client 调后端（如 bookmarksClient），不散落 fetch、不直接碰 wailsjs\n5. try/catch/finally，loading 标志在 finally 复位，错误用 showToast(msg, 'error')（来自 @/utils）\n6. 删除接口的 id 用 encodeURIComponent 转义\n7. 导出 useBookmarksStore",
+      "files": [],
+      "assertions": [
+        {
+          "name": "用 setup store 写法（defineStore + 工厂函数，非 Options）",
+          "check": "store_content.includes('defineStore(') && store_content.includes('=>') && !store_content.includes('actions:')",
+          "expected": true
+        },
+        {
+          "name": "state 用 reactive() 并 as XxxState 挂类型",
+          "check": "store_content.includes('reactive(') && (store_content.includes('as BookmarkState') || store_content.match(/as\\s+\\w+State/) !== null)",
+          "expected": true
+        },
+        {
+          "name": "类型引用 @/types（不是 @/core/types）",
+          "check": "store_content.includes(\"from '@/types'\") || store_content.includes('from \"@/types\"')",
+          "expected": true
+        },
+        {
+          "name": "后端调用经 services client（不裸 fetch、不用 @/core/api）",
+          "check": "!store_content.includes(\"@/core/api\") && !store_content.includes(\"fetch('/api/\")",
+          "expected": true
+        },
+        {
+          "name": "不用 const self = this（setup store 无 this）",
+          "check": "!store_content.includes('const self = this')",
+          "expected": true
+        },
+        {
+          "name": "有 try/catch/finally 且错误用 showToast",
+          "check": "store_content.includes('finally') && store_content.includes('showToast(')",
+          "expected": true
+        },
+        {
+          "name": "导出 useBookmarksStore",
+          "check": "store_content.includes('useBookmarksStore')",
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "component-consume-store",
+      "prompt": "做一个显示「当前曲线总数」和「隐藏曲线数」的徽标组件，并展示活动曲线列表（每条带删除按钮）。数据从 chart store 拿。按项目组件规范写。",
+      "expected_output": "一个 <script setup lang=\"ts\"> 组件：\n1. 用 storeToRefs 解构响应式 state/getter（如总数）\n2. 函数（如 removeCurveById）直接从 store 实例解构\n3. 不在组件里 ref() 重复持有共享状态\n4. 直接解构 store 拿 state 视为反模式（应用 storeToRefs）\n5. 放在 components/ 下合适的子目录（如 components/curves/ 或 components/charts/）",
+      "files": [],
+      "assertions": [
+        {
+          "name": "用 storeToRefs 解构响应式状态",
+          "check": "component_content.includes('storeToRefs(')",
+          "expected": true
+        },
+        {
+          "name": "从 @/stores/ 导入 store",
+          "check": "component_content.match(/from ['\"]@\\/stores\\//) !== null",
+          "expected": true
+        },
+        {
+          "name": "<script setup lang=\"ts\">",
+          "check": "component_content.includes('<script setup lang=\"ts\">')",
+          "expected": true
+        },
+        {
+          "name": "没有用裸解构拿 state（避免丢响应式）",
+          "check": "component_content.match(/const\\s+\\{[^}]*\\}\\s*=\\s*useChartStore\\(\\)/) === null || component_content.includes('storeToRefs')",
+          "expected": true
+        },
+        {
+          "name": "函数直接从 store 实例解构",
+          "check": "component_content.includes('useChartStore()') && /removeCurve|removeCurveById|toggleVisible/.test(component_content)",
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "add-backend-call",
+      "prompt": "在 chart store 里加一个「刷新某条曲线数据」的方法：重新拉曲线数据，刷新成功 toast 提示，失败 toast 报错，整个过程借用 log store 的 loading 标志。",
+      "expected_output": "在 stores/chart.ts 里新增一个普通 async 函数（setup store，无 this）：\n1. 直接读写闭包里的 reactive state（不需要 const self = this）\n2. 经对应 services client 取数据，不裸 fetch、不直接碰 wailsjs\n3. logStore.log.loading = true / 在 finally 里复位\n4. try/catch/finally，catch 里 showToast(msg, 'error')（来自 @/utils）\n5. 后端业务错误显式判断\n6. 不用 .then() 链",
+      "files": [
+        "frontend/src/stores/chart.ts"
+      ],
+      "assertions": [
+        {
+          "name": "是 async 函数",
+          "check": "updated_code.includes('async ')",
+          "expected": true
+        },
+        {
+          "name": "不用 const self = this",
+          "check": "!updated_code.includes('const self = this')",
+          "expected": true
+        },
+        {
+          "name": "loading 标志在 finally 复位",
+          "check": "updated_code.includes('finally') && /loading\\s*=\\s*false/.test(updated_code)",
+          "expected": true
+        },
+        {
+          "name": "异常用 showToast 报错",
+          "check": "updated_code.includes('showToast(') && updated_code.includes('error')",
+          "expected": true
+        },
+        {
+          "name": "用 async/await 而非 .then() 链",
+          "check": "updated_code.includes('await ') && !/\\.then\\s*\\(/.test(updated_code)",
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "3d-quaternion-interpolation",
+      "prompt": "stores/three.ts 里更新相机姿态的那段，现在是直接写欧拉角 camera.rotation.set(pitch, roll, yaw)，会有万向锁。改成四元数并加插值平滑过渡。",
+      "expected_output": "在 stores/three.ts 内修改：\n1. 用 THREE.Quaternion + setFromEuler 构造目标四元数\n2. 用 slerp 做旋转插值（camera.quaternion.slerp）\n3. 位置用 lerp 插值\n4. 移除 camera.rotation.set / 直接赋 rotation.x/y/z 的写法\n5. 保持 setup store 函数上下文（composables/ 可用，但不要新建独立 @/three/ 核心目录）",
+      "files": [
+        "frontend/src/stores/three.ts"
+      ],
+      "assertions": [
+        {
+          "name": "使用四元数",
+          "check": "updated_code.includes('Quaternion')",
+          "expected": true
+        },
+        {
+          "name": "旋转用 slerp 插值",
+          "check": "updated_code.includes('.slerp(')",
+          "expected": true
+        },
+        {
+          "name": "位置用 lerp 插值",
+          "check": "updated_code.includes('.lerp(')",
+          "expected": true
+        },
+        {
+          "name": "移除了直接写欧拉角",
+          "check": "!updated_code.includes('rotation.set(') && !/rotation\\.[xyz]\\s*=/.test(updated_code)",
+          "expected": true
+        },
+        {
+          "name": "没有新建独立 @/three/ 核心目录",
+          "check": "!/from ['\"]@\\/three\\//.test(updated_code)",
+          "expected": true
+        }
+      ]
+    }
+  ]
+}
