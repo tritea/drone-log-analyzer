@@ -185,6 +185,13 @@ function resolutionFromPct(evt: Event): number {
             </select>
           </div>
           <div class="settings-row">
+            <span class="settings-label">姿态仪模型</span>
+            <select class="settings-select" :value="three.attitudeModel" @change="scene.onAttitudeModelChange(str($event))">
+              <option value="glb">精细 GLB</option>
+              <option value="lowpoly">轻量模型</option>
+            </select>
+          </div>
+          <div class="settings-row">
             <span class="settings-label">姿态仪抗锯齿</span>
             <select class="settings-select" :value="three.render.attitude.aa" @change="scene.onAttitudeAaChange(str($event))">
               <option value="msaa">MSAA</option>

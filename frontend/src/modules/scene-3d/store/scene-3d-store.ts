@@ -161,6 +161,7 @@ export const useScene3dStore = defineStore('scene-3d', () => {
     sky: { enabled: true, cloud: 0.6 },
     droneScale: 1,
     model: 'glb' as 'glb' | 'lowpoly',
+    attitudeModel: 'glb' as 'glb' | 'lowpoly',
     ground: { show: true },
     water: { enabled: false, wave: 0.4 },
     render: { quality: 'auto', main: { aa: 'msaa', resolution: 1 }, attitude: { aa: 'msaa', resolution: 1 }, fps: 0 },
@@ -1845,34 +1846,37 @@ export const useScene3dStore = defineStore('scene-3d', () => {
       const logStore = useLogStore()
       const summary = logStore.log.summary
       const modelName = resolveDroneModelName(summary && summary.frame, summary && summary.airframe)
-      const key = modelName + '@' + three.value.model;
+      // 主模型与姿态模型形态独立：key 含两者，任一变化都重载。
+      const key = modelName + '@main:' + three.value.model + '@att:' + three.value.attitudeModel;
       if (runtime.threeView.droneModelName && runtime.threeView.droneModelName === key) return;
 
-      if (three.value.model === 'lowpoly') {
-        loadThreeMainDroneModel({ scene: buildLowpolyDroneModel(modelName) }, modelName);
-        loadThreeAttributeDroneModel({ scene: buildLowpolyDroneModel(modelName) }, modelName);
-        runtime.threeView.droneModelName = key;
-        return;
-      }
-
-      if (!GLTFLoader) return;
-      function loadOnce(target: 'main' | 'attitude', name: string): void {
-        const loader = new GLTFLoader();
-        loader.load(`vendor/${name}.glb`,
-          function (geometry: any) {
-            if (target === 'main') loadThreeMainDroneModel(geometry, name)
-            else loadThreeAttributeDroneModel(geometry, name)
-          },
-          undefined,
-          function () {
-            if (name !== THREE_DEFAULT_DRONE_MODEL) loadOnce(target, THREE_DEFAULT_DRONE_MODEL)
-          },
-        );
-      }
-      loadOnce('main', modelName)
-      loadOnce('attitude', modelName)
+      loadDroneModelForTarget('main', modelName, three.value.model)
+      loadDroneModelForTarget('attitude', modelName, three.value.attitudeModel)
 
       runtime.threeView.droneModelName = key
+  }
+
+    // 按 target(main/attitude) 与形态(glb/lowpoly) 加载无人机模型。
+    // lowpoly → buildLowpolyDroneModel 同步建模；glb → GLTFLoader 异步加载，失败回退默认机型 QUAD-X。
+  function loadDroneModelForTarget(target: 'main' | 'attitude', name: string, mode: 'glb' | 'lowpoly'): void {
+      if (mode === 'lowpoly') {
+        const scene = buildLowpolyDroneModel(name)
+        if (target === 'main') loadThreeMainDroneModel({ scene }, name)
+        else loadThreeAttributeDroneModel({ scene }, name)
+        return
+      }
+      if (!GLTFLoader) return
+      const loader = new GLTFLoader()
+      loader.load(`vendor/${name}.glb`,
+        function (geometry: any) {
+          if (target === 'main') loadThreeMainDroneModel(geometry, name)
+          else loadThreeAttributeDroneModel(geometry, name)
+        },
+        undefined,
+        function () {
+          if (name !== THREE_DEFAULT_DRONE_MODEL) loadDroneModelForTarget(target, THREE_DEFAULT_DRONE_MODEL, mode)
+        },
+      )
   }
 
     // 程序化方块模型(lowpoly)与 addLowpolyMotor/addLowpolyProp 已抽到 @/modules/shared/utils/drone-model
@@ -1884,6 +1888,17 @@ export const useScene3dStore = defineStore('scene-3d', () => {
       const next: 'glb' | 'lowpoly' = model === 'lowpoly' ? 'lowpoly' : 'glb';
       if (three.value.model === next) return;
       three.value.model = next;
+      if (runtime.threeView) {
+        runtime.threeView.droneModelName = ''; // 清去重键，强制重载
+        loadDroneModel();
+      }
+  }
+
+    // 姿态仪模型形态独立切换（与主模型解耦）：重载模型；主形态不变故主模型同态重载（GLB 浏览器缓存命中，无额外开销）。
+  function onAttitudeModelChange(model: string): void {
+      const next: 'glb' | 'lowpoly' = model === 'lowpoly' ? 'lowpoly' : 'glb';
+      if (three.value.attitudeModel === next) return;
+      three.value.attitudeModel = next;
       if (runtime.threeView) {
         runtime.threeView.droneModelName = ''; // 清去重键，强制重载
         loadDroneModel();
@@ -3779,7 +3794,7 @@ export const useScene3dStore = defineStore('scene-3d', () => {
     sampleAtTime, mixNullable, toggleThreeMissionRoute, toggleThreeWaypoints, rebuildThreeMissionVersions,
     activeMissionVersionAt, missionAltIsRelative, computeMissionPoints, missionLatLngPoints,
     updateThreeMissionRoute, getVertices, resolveDroneModelName, loadDroneModel,
-    buildLowpolyDroneModel, addLowpolyMotor, addLowpolyProp, onModelChange,
+    buildLowpolyDroneModel, addLowpolyMotor, addLowpolyProp, onModelChange, onAttitudeModelChange,
     loadThreeMainDroneModel, makeLatRing, makeMeridian, createAttitudeSphere,
     rebuildAttitudeAxes, rebuildWindArrow, updateWindArrow, updateAttitudeArcs,
     loadThreeAttributeDroneModel, buildTierMaterial, applyMaterialTier, applyExtraDroneModel,

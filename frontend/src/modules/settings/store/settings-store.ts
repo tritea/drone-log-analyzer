@@ -98,6 +98,7 @@ interface ThreeSnapshot {
   sky?: SkySnapshot;
   droneScale?: number;
   model?: DroneModel;
+  attitudeModel?: DroneModel;
   ground?: GroundSnapshot;
   water?: WaterSnapshot;
   render?: RenderSnapshot;
@@ -224,6 +225,7 @@ export const useSettingsStore = defineStore('settings', () => {
         sky: { enabled: three.sky.enabled, cloud: three.sky.cloud },
         droneScale: three.droneScale,
         model: three.model,
+        attitudeModel: three.attitudeModel,
         ground: { show: three.ground.show },
         water: { enabled: three.water.enabled, wave: three.water.wave },
         render: {
@@ -372,6 +374,7 @@ export const useSettingsStore = defineStore('settings', () => {
     applySkySlice(t.sky);
     applyDroneScaleSlice(t.droneScale);
     if (t.model === 'glb' || t.model === 'lowpoly') useScene3dStore().onModelChange(t.model);
+    if (t.attitudeModel === 'glb' || t.attitudeModel === 'lowpoly') useScene3dStore().onAttitudeModelChange(t.attitudeModel);
     applyGroundSlice(t.ground);
     applyWaterSlice(t.water);
     applyRenderSlice(t.render);

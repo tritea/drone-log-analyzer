@@ -362,6 +362,7 @@ export interface ThreeState {
   sky: ThreeSkyState;
   droneScale: number;
   model: 'glb' | 'lowpoly';
+  attitudeModel: 'glb' | 'lowpoly';
   ground: { show: boolean };
   water: { enabled: boolean; wave: number };
   render: { quality: 'auto' | 'high' | 'medium' | 'low'; main: ThreeRenderSide; attitude: ThreeRenderSide; fps: number };
