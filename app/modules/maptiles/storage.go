@@ -25,6 +25,13 @@ const (
 	touchFlushCadence = 30 * time.Second   // how often last_used touches are flushed to disk
 )
 
+// providerStat is the on-disk footprint of one provider's cached tiles as
+// tracked in memory: total blob bytes and row count.
+type providerStat struct {
+	bytes int64
+	tiles int64
+}
+
 // MBTilesStorage is an MBTiles-backed tile cache: an in-memory LRU in front of
 // a single SQLite database, with singleflight de-duplication of concurrent
 // misses, size accounting per provider, LRU eviction, and batched last_used
@@ -36,8 +43,8 @@ type MBTilesStorage struct {
 	mem      *lru.LRU[string, []byte]
 	dedup    singleflight.Group
 
-	bytesMu   sync.RWMutex
-	bytesByID map[string]int64
+	statsMu   sync.RWMutex
+	statsByID map[string]providerStat
 
 	touchMu        sync.Mutex
 	pendingTouches map[string]touchEntry
@@ -47,8 +54,9 @@ type MBTilesStorage struct {
 }
 
 // OpenStorage opens (or creates) the MBTiles database at path, seeding the
-// per-provider size counters from existing rows. capBytes <= 0 selects
-// DefaultMaxCacheBytes.
+// per-provider byte/tile counters with a single aggregate scan — the only full
+// scan of the process; every later write updates the counters incrementally.
+// capBytes <= 0 selects DefaultMaxCacheBytes.
 func OpenStorage(path string, capBytes int64) (*MBTilesStorage, error) {
 	if capBytes <= 0 {
 		capBytes = DefaultMaxCacheBytes
@@ -62,17 +70,17 @@ func OpenStorage(path string, capBytes int64) (*MBTilesStorage, error) {
 		return nil, err
 	}
 
-	bytesByID, _, err := aggregateSizes(handle)
+	statsByID, err := aggregateStats(handle)
 	if err != nil {
 		handle.Close()
-		return nil, fmt.Errorf("seed size counters: %w", err)
+		return nil, fmt.Errorf("seed cache stats: %w", err)
 	}
 
 	st := &MBTilesStorage{
 		handle:         handle,
 		capacity:       capBytes,
 		mem:            lru.NewLRU[string, []byte](memCacheSlots, nil, memCacheTTL),
-		bytesByID:      bytesByID,
+		statsByID:      statsByID,
 		pendingTouches: map[string]touchEntry{},
 		halt:           make(chan struct{}),
 	}
@@ -152,7 +160,7 @@ func (s *MBTilesStorage) revalidate(provider string, z, x, y int, fallback func(
 		if err != nil || !replaced {
 			return fresh, nil
 		}
-		s.adjustBytes(provider, int64(len(fresh))-oldLen)
+		s.adjustStat(provider, int64(len(fresh))-oldLen, 0)
 		s.mem.Add(key, fresh)
 		return fresh, nil
 	})
@@ -164,7 +172,7 @@ func (s *MBTilesStorage) saveNew(provider string, z, x, y int, data []byte) {
 	if err != nil || !inserted {
 		return
 	}
-	s.adjustBytes(provider, int64(len(data)))
+	s.adjustStat(provider, int64(len(data)), 1)
 	s.enforceCap()
 }
 
@@ -203,8 +211,8 @@ func (s *MBTilesStorage) enforceCap() {
 	if err != nil {
 		return
 	}
-	for provider, reclaimed := range freed {
-		s.adjustBytes(provider, -reclaimed)
+	for provider, freedStat := range freed {
+		s.adjustStat(provider, -freedStat.bytes, -freedStat.tiles)
 	}
 }
 
@@ -254,39 +262,55 @@ func (s *MBTilesStorage) drainTouches() {
 	_ = persistTouches(s.handle, entries)
 }
 
-// adjustBytes applies a delta to a provider's cached-byte total.
-func (s *MBTilesStorage) adjustBytes(provider string, delta int64) {
-	s.bytesMu.Lock()
-	s.bytesByID[provider] += delta
-	s.bytesMu.Unlock()
+// adjustStat applies byte/count deltas to a provider's in-memory footprint.
+func (s *MBTilesStorage) adjustStat(provider string, dBytes, dTiles int64) {
+	s.statsMu.Lock()
+	cur := s.statsByID[provider]
+	cur.bytes += dBytes
+	cur.tiles += dTiles
+	s.statsByID[provider] = cur
+	s.statsMu.Unlock()
 }
 
 // totalBytes returns the sum of all providers' cached bytes.
 func (s *MBTilesStorage) totalBytes() int64 {
-	s.bytesMu.RLock()
-	defer s.bytesMu.RUnlock()
+	s.statsMu.RLock()
+	defer s.statsMu.RUnlock()
 	var total int64
-	for _, n := range s.bytesByID {
-		total += n
+	for _, st := range s.statsByID {
+		total += st.bytes
 	}
 	return total
 }
 
-// SizeByProvider returns a snapshot of cached bytes keyed by provider id.
-func (s *MBTilesStorage) SizeByProvider() map[string]int64 {
-	s.bytesMu.RLock()
-	defer s.bytesMu.RUnlock()
-	out := make(map[string]int64, len(s.bytesByID))
-	for k, v := range s.bytesByID {
+// snapshotStats returns a copy of the per-provider footprint counters.
+func (s *MBTilesStorage) snapshotStats() map[string]providerStat {
+	s.statsMu.RLock()
+	defer s.statsMu.RUnlock()
+	out := make(map[string]providerStat, len(s.statsByID))
+	for k, v := range s.statsByID {
 		out[k] = v
 	}
 	return out
 }
 
-// TileCount returns the number of cached tiles for the given provider.
+// SizeByProvider returns a snapshot of cached bytes keyed by provider id.
+func (s *MBTilesStorage) SizeByProvider() map[string]int64 {
+	s.statsMu.RLock()
+	defer s.statsMu.RUnlock()
+	out := make(map[string]int64, len(s.statsByID))
+	for k, v := range s.statsByID {
+		out[k] = v.bytes
+	}
+	return out
+}
+
+// TileCount returns the number of cached tiles for the given provider, from
+// the in-memory counters — no query.
 func (s *MBTilesStorage) TileCount(provider string) int64 {
-	n, _ := countProviderTiles(s.handle, provider)
-	return n
+	s.statsMu.RLock()
+	defer s.statsMu.RUnlock()
+	return s.statsByID[provider].tiles
 }
 
 // Clear drops every cached tile for the given provider.
@@ -295,7 +319,7 @@ func (s *MBTilesStorage) Clear(provider string) error {
 	if err != nil {
 		return err
 	}
-	s.adjustBytes(provider, -freed)
+	s.adjustStat(provider, -freed.bytes, -freed.tiles)
 	return nil
 }
 
@@ -304,9 +328,9 @@ func (s *MBTilesStorage) ClearAll() error {
 	if _, err := s.handle.Exec("DELETE FROM tiles"); err != nil {
 		return err
 	}
-	s.bytesMu.Lock()
-	s.bytesByID = map[string]int64{}
-	s.bytesMu.Unlock()
+	s.statsMu.Lock()
+	s.statsByID = map[string]providerStat{}
+	s.statsMu.Unlock()
 	return nil
 }
 

@@ -89,22 +89,26 @@ func persistTouches(db *sql.DB, entries []touchEntry) error {
 }
 
 // purgeStaleRows deletes every tile with last_used <= cutoff and reports the
-// bytes reclaimed per provider.
-func purgeStaleRows(db *sql.DB, cutoff int64) (map[string]int64, error) {
-	freed := map[string]int64{}
+// reclaimed footprint per provider (bytes + deleted tile count). One grouped
+// aggregate pass instead of a row-by-row scan.
+func purgeStaleRows(db *sql.DB, cutoff int64) (map[string]providerStat, error) {
+	freed := map[string]providerStat{}
 
-	rows, err := db.Query("SELECT provider, length(tile_data) FROM tiles WHERE last_used<=?", cutoff)
+	rows, err := db.Query(
+		"SELECT provider, COUNT(*), SUM(length(tile_data)) FROM tiles WHERE last_used<=? GROUP BY provider",
+		cutoff,
+	)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
 		var provider string
-		var size int64
-		if err := rows.Scan(&provider, &size); err != nil {
+		var stat providerStat
+		if err := rows.Scan(&provider, &stat.tiles, &stat.bytes); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		freed[provider] += size
+		freed[provider] = stat
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -121,39 +125,45 @@ func purgeStaleRows(db *sql.DB, cutoff int64) (map[string]int64, error) {
 	return freed, nil
 }
 
-// aggregateSizes sums cached bytes per provider across all tiles, returning the
-// per-provider map and grand total.
-func aggregateSizes(db *sql.DB) (map[string]int64, int64, error) {
-	out := map[string]int64{}
-	var total int64
+// aggregateStats sums cached bytes and tile counts per provider across all
+// tiles. It is the single startup scan that seeds the in-memory counters;
+// afterwards every write path updates them incrementally.
+func aggregateStats(db *sql.DB) (map[string]providerStat, error) {
+	out := map[string]providerStat{}
 
-	rows, err := db.Query("SELECT provider, SUM(length(tile_data)) FROM tiles GROUP BY provider")
+	rows, err := db.Query("SELECT provider, COUNT(*), SUM(length(tile_data)) FROM tiles GROUP BY provider")
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var provider string
-		var sum sql.NullInt64
-		if err := rows.Scan(&provider, &sum); err != nil {
-			return nil, 0, err
+		var stat providerStat
+		if err := rows.Scan(&provider, &stat.tiles, &stat.bytes); err != nil {
+			return nil, err
 		}
-		out[provider] = sum.Int64
-		total += sum.Int64
+		out[provider] = stat
 	}
-	return out, total, rows.Err()
+	return out, rows.Err()
 }
 
-// wipeProvider deletes every tile for a provider and reports bytes freed.
-func wipeProvider(db *sql.DB, provider string) (int64, error) {
-	var freed sql.NullInt64
-	if err := db.QueryRow("SELECT SUM(length(tile_data)) FROM tiles WHERE provider=?", provider).Scan(&freed); err != nil {
-		return 0, err
+// wipeProvider deletes every tile for a provider and reports its freed
+// footprint (bytes and tile count).
+func wipeProvider(db *sql.DB, provider string) (providerStat, error) {
+	var stat providerStat
+	err := db.QueryRow(
+		"SELECT COUNT(*), COALESCE(SUM(length(tile_data)), 0) FROM tiles WHERE provider=?", provider,
+	).Scan(&stat.tiles, &stat.bytes)
+	if err != nil {
+		return providerStat{}, err
+	}
+	if stat.tiles == 0 {
+		return stat, nil
 	}
 	if _, err := db.Exec("DELETE FROM tiles WHERE provider=?", provider); err != nil {
-		return 0, err
+		return providerStat{}, err
 	}
-	return freed.Int64, nil
+	return stat, nil
 }
 
 // countProviderTiles returns the number of cached tiles for a provider.

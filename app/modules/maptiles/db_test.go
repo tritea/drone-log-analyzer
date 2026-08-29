@@ -52,9 +52,9 @@ func TestDBOps(t *testing.T) {
 		t.Fatalf("refresh: replaced=%v oldLen=%d err=%v", replaced, oldLen, err)
 	}
 
-	prov, total, err := aggregateSizes(db)
-	if err != nil || total != 4 || prov["osm"] != 4 {
-		t.Fatalf("sizes: %+v total=%d err=%v", prov, total, err)
+	stats, err := aggregateStats(db)
+	if err != nil || stats["osm"].bytes != 4 || stats["osm"].tiles != 1 {
+		t.Fatalf("stats: %+v err=%v", stats, err)
 	}
 
 	if n, _ := countProviderTiles(db, "osm"); n != 1 {
@@ -76,8 +76,8 @@ func TestDBDeleteByCutoffLRU(t *testing.T) {
 	if err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if freed["osm"] != 300 {
-		t.Fatalf("freed=%d want 300", freed["osm"])
+	if freed["osm"].bytes != 300 || freed["osm"].tiles != 3 {
+		t.Fatalf("freed=%+v want bytes 300 tiles 3", freed["osm"])
 	}
 	if n, _ := countProviderTiles(db, "osm"); n != 2 {
 		t.Fatalf("remaining=%d want 2", n)
@@ -89,8 +89,8 @@ func TestDBClearProvider(t *testing.T) {
 	defer db.Close()
 	insertTileRow(db, "osm", 2, 0, 0, []byte("aaaa"), 1)
 	insertTileRow(db, "amap_vector", 2, 0, 0, []byte("bb"), 1)
-	if freed, err := wipeProvider(db, "osm"); err != nil || freed != 4 {
-		t.Fatalf("clear osm: freed=%d err=%v", freed, err)
+	if freed, err := wipeProvider(db, "osm"); err != nil || freed.bytes != 4 || freed.tiles != 1 {
+		t.Fatalf("clear osm: freed=%+v err=%v", freed, err)
 	}
 	if n, _ := countProviderTiles(db, "osm"); n != 0 {
 		t.Fatalf("osm count=%d want 0", n)

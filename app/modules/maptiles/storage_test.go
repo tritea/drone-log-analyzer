@@ -96,12 +96,70 @@ func TestStorageEvictionBounded(t *testing.T) {
 		if ins, err := insertTileRow(st.handle, "test", 4, i, 0, make([]byte, 100), int64(1000+i)); err != nil || !ins {
 			t.Fatalf("insert i=%d: ins=%v err=%v", i, ins, err)
 		}
-		st.adjustBytes("test", 100)
+		st.adjustStat("test", 100, 1)
 		st.enforceCap()
 	}
 
 	if sz := st.totalBytes(); sz > 350 {
 		t.Fatalf("eviction did not bound size: %d bytes (cap 350)", sz)
+	}
+	dbCount, _ := countProviderTiles(st.handle, "test")
+	if st.TileCount("test") != dbCount {
+		t.Fatalf("tile count drift: memory=%d db=%d", st.TileCount("test"), dbCount)
+	}
+}
+
+func TestStorageStatsReloadAndSync(t *testing.T) {
+	path := t.TempDir() + "/reload.mbtiles"
+
+	st, err := OpenStorage(path, 1<<20)
+	if err != nil {
+		t.Fatalf("OpenStorage: %v", err)
+	}
+	st.saveNew("osm", 2, 0, 0, []byte("12345"))
+	st.saveNew("osm", 2, 1, 0, []byte("6789"))
+	st.saveNew("amap_vector", 2, 0, 0, []byte("ab"))
+	if err := st.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Reopen: counters must be re-seeded by the single startup scan.
+	st2, err := OpenStorage(path, 1<<20)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer st2.Close()
+	if got := st2.SizeByProvider()["osm"]; got != 9 {
+		t.Fatalf("reloaded bytes=%d want 9", got)
+	}
+	if got := st2.TileCount("osm"); got != 2 {
+		t.Fatalf("reloaded tiles=%d want 2", got)
+	}
+	if got := st2.TileCount("amap_vector"); got != 1 {
+		t.Fatalf("reloaded amap_vector tiles=%d want 1", got)
+	}
+
+	// Writes keep counters in sync with the database.
+	if err := st2.Clear("osm"); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if st2.SizeByProvider()["osm"] != 0 || st2.TileCount("osm") != 0 {
+		t.Fatalf("after clear osm: bytes=%d tiles=%d",
+			st2.SizeByProvider()["osm"], st2.TileCount("osm"))
+	}
+	dbCount, _ := countProviderTiles(st2.handle, "osm")
+	if dbCount != 0 {
+		t.Fatalf("db rows after clear=%d want 0", dbCount)
+	}
+	if st2.TileCount("amap_vector") != 1 {
+		t.Fatalf("amap_vector count disturbed: %d", st2.TileCount("amap_vector"))
+	}
+
+	if err := st2.ClearAll(); err != nil {
+		t.Fatalf("ClearAll: %v", err)
+	}
+	if st2.totalBytes() != 0 || st2.TileCount("amap_vector") != 0 {
+		t.Fatalf("after ClearAll: bytes=%d tiles=%d", st2.totalBytes(), st2.TileCount("amap_vector"))
 	}
 }
 

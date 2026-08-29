@@ -68,18 +68,20 @@ func (s *TileService) CacheDir() string { return s.cacheRoot }
 func (s *TileService) CapBytes() int64 { return s.store.capacity }
 
 // CacheStats reports per-provider bytes/tile counts plus the grand total.
+// Both figures come from the in-memory counters seeded once at startup and
+// updated incrementally on every write — this never queries the database.
 func (s *TileService) CacheStats() ([]ProviderCacheStat, int64) {
-	sizes := s.store.SizeByProvider()
+	stats := s.store.snapshotStats()
 	out := make([]ProviderCacheStat, 0, len(s.ordered))
 	var total int64
 	for _, p := range s.ordered {
-		sz := sizes[p.ID()]
-		total += sz
+		st := stats[p.ID()]
+		total += st.bytes
 		out = append(out, ProviderCacheStat{
 			ID:        p.ID(),
 			Name:      p.Name(),
-			SizeBytes: sz,
-			TileCount: s.store.TileCount(p.ID()),
+			SizeBytes: st.bytes,
+			TileCount: st.tiles,
 		})
 	}
 	return out, total

@@ -95,11 +95,16 @@ func TestCacheStatsAndClear(t *testing.T) {
 		t.Fatalf("total=%d want 10", total)
 	}
 	byID := map[string]int64{}
+	counts := map[string]int64{}
 	for _, s := range stats {
 		byID[s.ID] = s.SizeBytes
+		counts[s.ID] = s.TileCount
 	}
 	if byID["osm"] != 5 || byID["bing_road"] != 5 {
 		t.Fatalf("stats by provider: %+v", byID)
+	}
+	if counts["osm"] != 1 || counts["bing_road"] != 1 {
+		t.Fatalf("tile counts by provider: %+v", counts)
 	}
 	if svc.CapBytes() != DefaultMaxCacheBytes {
 		t.Fatalf("CapBytes=%d want %d", svc.CapBytes(), DefaultMaxCacheBytes)
@@ -111,6 +116,14 @@ func TestCacheStatsAndClear(t *testing.T) {
 	stats, total = svc.CacheStats()
 	if total != 5 {
 		t.Fatalf("after clear osm total=%d want 5", total)
+	}
+	for _, s := range stats {
+		if s.ID == "osm" && (s.SizeBytes != 0 || s.TileCount != 0) {
+			t.Fatalf("after clear osm stat: %+v", s)
+		}
+		if s.ID == "bing_road" && (s.SizeBytes != 5 || s.TileCount != 1) {
+			t.Fatalf("bing_road stat disturbed: %+v", s)
+		}
 	}
 	if err := svc.ClearCache("nope"); err != ErrUnknownProvider {
 		t.Fatalf("clear unknown: %v want ErrUnknownProvider", err)

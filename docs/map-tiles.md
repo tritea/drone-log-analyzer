@@ -63,7 +63,7 @@ key = provider/z/x/y
 
 ## 容量统计与淘汰
 
-- **各源/总量字节数在内存维护**：启动时 `SUM(length(tile_data))` 初始化，增删时增量更新（`addSize`）——`CacheStats` 永不查库，瞬时返回。瓦片数是廉价 `COUNT`。
+- **各源字节数与瓦片数都在内存维护**：启动时一次 `GROUP BY provider` 聚合（`COUNT(*)` + `SUM(length(tile_data))`）预加载进内存计数器——这是进程生命周期内唯一一次全表聚合；之后所有写路径（新瓦片入库、后台刷新替换、LRU 淘汰、清空单源/全部）同步增量更新计数。`CacheStats` 因此**完全不查库**，瞬时返回（不再有每次按源 `COUNT(*)` 的开销）。
 - **`last_used` 不逐读更新**：`markAccess` 把访问记进内存 map，`accessFlushLoop` 每 30s 合并成一次事务批量写。
 - **淘汰**（`evictIfNeeded`，仅在 `storeNew` 后触发）：总量超 `capBytes` 时，按 `last_used ASC` 流式累积字节数直到覆盖「待释放量 = `total - cap*80%`」，取该 cutoff 时间戳**一次** `DELETE WHERE last_used <= cutoff`，按 freed 字芔回减各源计数。即「最久未用」优先，目标降到上限的 80%。
 - **磁盘回收**：只在**启动时**异步跑一次 `PRAGMA incremental_vacuum`（[OpenStorage](../app/modules/maptiles/storage.go)），不每次淘汰都 `VACUUM`（避免写放大）。淘汰本身只做内存记账 + DELETE，把空闲页留给下次启动的 incremental_vacuum 收拢。
