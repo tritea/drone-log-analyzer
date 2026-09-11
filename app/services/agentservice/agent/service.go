@@ -102,7 +102,11 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 	}
 	class := knowledge.Class(sum.VehicleType, sum.Frame, sum.Airframe)
 
-	built, err := tools.Build(tools.Deps{Log: s.deps.Log, Format: sum.Format, Class: class})
+	var abs *tools.AbsTime
+	if sum.HasUTC {
+		abs = &tools.AbsTime{StartUnix: sum.StartUnixSecs}
+	}
+	built, err := tools.Build(tools.Deps{Log: s.deps.Log, Format: sum.Format, Class: class, Abs: abs})
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +133,8 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 	defer cancel()
 
 	sess := s.sessionFor(ctx)
-	input := sess.snapshot()
+	// 历史裁剪：控制多轮上下文体积（旧轮工具结果是 token 大头）。
+	input := trimContext(sess.snapshot())
 	input = append(input, schema.UserMessage(msg))
 	r := newRun(s.deps.Sink)
 

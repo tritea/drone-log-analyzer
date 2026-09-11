@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"drone-log-analyzer/app/modules/knowledge"
 	"drone-log-analyzer/app/services/logservice"
@@ -26,6 +27,10 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
 	if sum.DurationSecs > 0 {
 		fmt.Fprintf(&b, "- 飞行时长：约 %.0f 秒\n", sum.DurationSecs)
 	}
+	if sum.HasUTC {
+		fmt.Fprintf(&b, "- 日志起始时间：%s（本地时区），相对秒 0 对应该时刻\n",
+			time.Unix(sum.StartUnixSecs, 0).Format("2006-01-02 15:04:05"))
+	}
 
 	b.WriteString(`
 分析流程：
@@ -37,6 +42,8 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
 回答规则：
 - 用中文回答，用 Markdown 组织排版（小标题、列表、表格、加粗关键数据）。
 - 引用数据时注明字段名与时间范围（如 "GPS.NSats 在 120~145s 低于 5"）。
+- 提及具体时刻时给出绝对时间（工具输出的 time/startAt/timeBase 字段已直接提供，
+  未提供的可由日志起始时间 + 相对秒推算），格式如 "14:35:12（325s）"，便于报告存档对照。
 - 阈值判定优先依据字段附带的参考阈值；没有阈值依据时明确说明是推断。
 - 结论按置信度排序，给出可执行的检查建议；不确定就直说，不要编造数据。
 `)

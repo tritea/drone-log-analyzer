@@ -1,6 +1,9 @@
 package knowledge
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestForFormat(t *testing.T) {
 	if err := LoadError(); err != nil {
@@ -36,6 +39,63 @@ func TestGroupInstanceFallback(t *testing.T) {
 	}
 	if apm.Group("NOPE") != nil {
 		t.Fatal("NOPE should be nil")
+	}
+}
+
+func TestTlogKnowledge(t *testing.T) {
+	tlog := ForFormat("tlog")
+	if len(tlog.Groups) < 30 {
+		t.Fatalf("tlog KB too small: %d groups", len(tlog.Groups))
+	}
+	// 核心消息条目与字段名（须与 gomavlib 解析产出的列名一致）。
+	if _, ok := tlog.Field("GPS_RAW_INT", "SatellitesVisible"); !ok {
+		t.Error("tlog KB missing GPS_RAW_INT.SatellitesVisible")
+	}
+	if _, ok := tlog.Field("GLOBAL_POSITION_INT", "RelativeAlt"); !ok {
+		t.Error("tlog KB missing GLOBAL_POSITION_INT.RelativeAlt")
+	}
+	if _, ok := tlog.Field("EKF_STATUS_REPORT", "VelocityVariance"); !ok {
+		t.Error("tlog KB missing EKF_STATUS_REPORT.VelocityVariance")
+	}
+	// 多实例回退：SCALED_IMU2 → SCALED_IMU。
+	if _, ok := tlog.Groups["SCALED_IMU2"]; ok {
+		t.Error("SCALED_IMU2 should not be an explicit entry")
+	}
+	if _, ok := tlog.Field("SCALED_IMU2", "Xacc"); !ok {
+		t.Error("SCALED_IMU2 should fall back to SCALED_IMU")
+	}
+	// 固件差异描述：EKF_STATUS_REPORT 应标注 ArduPilot 专用。
+	if gm := tlog.Group("EKF_STATUS_REPORT"); gm == nil || !strings.Contains(gm.Description, "ArduPilot 专用") {
+		t.Errorf("EKF_STATUS_REPORT description should mark ArduPilot-only, got %v", gm)
+	}
+}
+
+func TestUlogKnowledge(t *testing.T) {
+	ulog := ForFormat("ulog")
+	if len(ulog.Groups) < 20 {
+		t.Fatalf("ulog KB too small: %d groups", len(ulog.Groups))
+	}
+	// 数组展开字段名（带下标）。
+	if _, ok := ulog.Field("sensor_combined", "accelerometer_m_s2[2]"); !ok {
+		t.Error("ulog KB missing sensor_combined.accelerometer_m_s2[2]")
+	}
+	if _, ok := ulog.Field("vehicle_attitude", "q[0]"); !ok {
+		t.Error("ulog KB missing vehicle_attitude.q[0]")
+	}
+	if _, ok := ulog.Field("battery_status", "voltage_v"); !ok {
+		t.Error("ulog KB missing battery_status.voltage_v")
+	}
+	if _, ok := ulog.Field("estimator_innovations", "gps_hvel_innov"); !ok {
+		t.Error("ulog KB missing estimator_innovations.gps_hvel_innov")
+	}
+	// 新旧话题双注册。
+	if ulog.Group("ekf2_innovations") == nil {
+		t.Error("ulog KB missing legacy ekf2_innovations topic")
+	}
+	// 阈值格式。
+	fm, ok := ulog.Field("vehicle_gps_position", "satellites_used")
+	if !ok || len(fm.Thresholds) != 2 || fm.Thresholds[0].Op != "lt" || fm.Thresholds[0].Value != 8 {
+		t.Errorf("satellites_used thresholds = %+v", fm.Thresholds)
 	}
 }
 

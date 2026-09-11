@@ -16,13 +16,15 @@ type flightEventsInput struct {
 
 type recordEntry struct {
 	TimeSec float64 `json:"timeSec"`
+	Time    string  `json:"time,omitempty"` // 绝对时刻（本地时区；空=无 UTC 基准）
 	Text    string  `json:"text"`
 }
 
 type flightEventsOutput struct {
-	Kind    string        `json:"kind"`
-	Count   int           `json:"count"`
-	Entries []recordEntry `json:"entries"`
+	Kind      string        `json:"kind"`
+	Count     int           `json:"count"` // 命中总数（entries 可能被截断）
+	Truncated bool          `json:"truncated,omitempty"`
+	Entries   []recordEntry `json:"entries"`
 }
 
 // flightEventsTool 返回错误/事件/模式切换记录（时间 + 文案），诊断时
@@ -74,6 +76,13 @@ func flightEventsTool(deps Deps) (tool.InvokableTool, error) {
 				return out, errBadKind
 			}
 			out.Count = len(out.Entries)
+			if len(out.Entries) > maxRecordEntries {
+				out.Entries = out.Entries[:maxRecordEntries]
+				out.Truncated = true
+			}
+			for i := range out.Entries {
+				out.Entries[i].Time = deps.Abs.At(out.Entries[i].TimeSec)
+			}
 			return out, nil
 		})
 }
@@ -97,8 +106,9 @@ type parameterEntry struct {
 }
 
 type parametersOutput struct {
-	Count   int              `json:"count"`
-	Entries []parameterEntry `json:"entries"`
+	Count     int              `json:"count"` // 命中总数（entries 可能被截断）
+	Truncated bool             `json:"truncated,omitempty"`
+	Entries   []parameterEntry `json:"entries"`
 }
 
 // parametersTool 返回飞控参数（可前缀过滤），并融合参数知识库：含义/单位/
@@ -134,6 +144,16 @@ func parametersTool(deps Deps) (tool.InvokableTool, error) {
 				out.Entries = append(out.Entries, entry)
 			}
 			out.Count = len(out.Entries)
+			// 截断 + 精简：条目多时去掉 Long 长述（token 大头），提示分批取。
+			if len(out.Entries) > maxParamEntries {
+				out.Entries = out.Entries[:maxParamEntries]
+				out.Truncated = true
+			}
+			if len(out.Entries) > 40 {
+				for i := range out.Entries {
+					out.Entries[i].Long = ""
+				}
+			}
 			return out, nil
 		})
 }

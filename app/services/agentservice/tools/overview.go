@@ -10,16 +10,18 @@ import (
 type overviewInput struct{}
 
 type overviewOutput struct {
-	Format          string  `json:"format"`           // apm / tlog / ulog
-	VehicleType     string  `json:"vehicleType"`      // 固件报的机型（如 Copter）
-	VehicleClass    string  `json:"vehicleClass"`     // 归一化机型类（multirotor 等）
+	Format          string  `json:"format"`       // apm / tlog / ulog
+	VehicleType     string  `json:"vehicleType"`  // 固件报的机型（如 Copter）
+	VehicleClass    string  `json:"vehicleClass"` // 归一化机型类（multirotor 等）
 	Frame           string  `json:"frame,omitempty"`
 	Airframe        string  `json:"airframe,omitempty"`
 	FirmwareVersion string  `json:"firmwareVersion,omitempty"`
 	HardwareType    string  `json:"hardwareType,omitempty"`
 	Filename        string  `json:"filename,omitempty"`
 	DurationSecs    float64 `json:"durationSecs,omitempty"`
-	GroupCount      int     `json:"groupCount"` // 日志内的数据 group 数
+	StartTime       string  `json:"startTime,omitempty"` // 日志起点（本地时区；空=无 UTC 基准）
+	EndTime         string  `json:"endTime,omitempty"`   // 日志终点（本地时区）
+	GroupCount      int     `json:"groupCount"`          // 日志内的数据 group 数
 	ParameterCount  int     `json:"parameterCount"`
 	ErrorCount      int     `json:"errorCount"`
 	EventCount      int     `json:"eventCount"`
@@ -45,6 +47,10 @@ func overviewTool(deps Deps) (tool.InvokableTool, error) {
 			out.HardwareType = sum.HardwareType
 			out.Filename = sum.Filename
 			out.DurationSecs = sum.DurationSecs
+			if deps.Abs != nil {
+				out.StartTime = deps.Abs.Start()
+				out.EndTime = deps.Abs.At(sum.DurationSecs)
+			}
 
 			if types, err := deps.Log.MessageTypes(ctx); err == nil {
 				out.GroupCount = len(types)

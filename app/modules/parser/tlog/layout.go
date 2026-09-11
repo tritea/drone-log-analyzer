@@ -45,14 +45,19 @@ func glTypeFor(k reflect.Kind) (gl parser.FieldGLType, size int, ok bool) {
 
 // unitScaleFor returns the multiplier that converts a raw field into display
 // units: 1e-7 for integer lat/lon degrees, 1e-3 for integer altitudes in
-// meters, and radian->degree for attitude angles. Other fields return 1.
+// millimeters, 0.01 for integer centi-units (velocity/accuracy/current/
+// distance), and radian->degree for attitude angles. Other fields return 1.
 func unitScaleFor(name string, k reflect.Kind) float64 {
 	low := strings.ToLower(name)
-	if isGeographicField(low) && (k == reflect.Int32 || k == reflect.Uint32) {
-		return 1e-7
-	}
-	if k == reflect.Int32 && isAltitudeField(low) {
-		return 1e-3
+	if isIntKind(k) {
+		switch {
+		case (k == reflect.Int32 || k == reflect.Uint32) && isGeographicField(low):
+			return 1e-7
+		case k == reflect.Int32 && isAltitudeField(low):
+			return 1e-3
+		case isCentiField(low):
+			return 0.01
+		}
 	}
 	if (k == reflect.Float32 || k == reflect.Float64) && isAngleRadians(low) {
 		return 180 / math.Pi
@@ -60,8 +65,32 @@ func unitScaleFor(name string, k reflect.Kind) float64 {
 	return 1
 }
 
+func isIntKind(k reflect.Kind) bool {
+	switch k {
+	case reflect.Int16, reflect.Uint16, reflect.Int32, reflect.Uint32:
+		return true
+	}
+	return false
+}
+
+// isCentiField reports whether an integer field uses MAVLink's ×100 wire
+// encoding: velocities in cm/s (vel/vx/vy/vz/airspeed), accuracies in cm
+// (eph/epv/hacc/...), current in centi-ampere, distances in cm.
+// Voltages are deliberately excluded — BATTERY2 uses mV while ESC_STATUS
+// uses cV, so the name alone cannot disambiguate them.
+func isCentiField(low string) bool {
+	switch low {
+	case "vel", "vx", "vy", "vz", "airspeed",
+		"eph", "epv", "hacc", "vacc", "velacc", "hdgacc",
+		"currentbattery",
+		"currentdistance", "mindistance", "maxdistance":
+		return true
+	}
+	return false
+}
+
 func isGeographicField(low string) bool {
-	return low == "lat" || low == "lon" || low == "lng" ||
+	return low == "lat" || low == "lon" || low == "lng" || low == "latint" || low == "lonint" ||
 		strings.Contains(low, "latitude") || strings.Contains(low, "longitude")
 }
 
@@ -75,7 +104,9 @@ func isAngleRadians(low string) bool {
 
 func isAltitudeField(low string) bool {
 	switch low {
-	case "alt", "relative_alt", "relativealt", "altitude", "alt_ellipsoid", "altellipsoid":
+	case "alt", "relative_alt", "relativealt", "altitude", "alt_ellipsoid", "altellipsoid",
+		"altitudemonotonic", "altitudeamsl", "altitudelocal", "altituderelative",
+		"altitudeterrain", "bottomclearance":
 		return true
 	}
 	return false
