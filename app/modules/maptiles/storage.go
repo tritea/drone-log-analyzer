@@ -3,6 +3,7 @@ package maptiles
 import (
 	"database/sql"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -288,9 +289,7 @@ func (s *MBTilesStorage) snapshotStats() map[string]providerStat {
 	s.statsMu.RLock()
 	defer s.statsMu.RUnlock()
 	out := make(map[string]providerStat, len(s.statsByID))
-	for k, v := range s.statsByID {
-		out[k] = v
-	}
+	maps.Copy(out, s.statsByID)
 	return out
 }
 
