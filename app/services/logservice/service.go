@@ -30,5 +30,6 @@ type Service interface {
 	Events(ctx context.Context) ([]EventEntry, error)
 	Browse(ctx context.Context, req BrowseRequest) (*BrowseResponse, error)
 	LogDefs(ctx context.Context) (*LogDefsResponse, error)
+	Series(ctx context.Context, req SeriesRequest) (*SeriesResponse, error)
 	Close() error
 }

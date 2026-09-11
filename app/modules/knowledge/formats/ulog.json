@@ -1,0 +1,55 @@
+{
+  "format": "ulog",
+  "version": 1,
+  "groups": {
+    "vehicle_gps_position": {
+      "description": "GPS 定位（uORB）：卫星数、fix 类型、精度因子与位置",
+      "affects": ["position", "navigation", "ekf"],
+      "fields": {
+        "satellites_used": {
+          "description": "使用中的卫星数量",
+          "unit": "count",
+          "thresholds": [
+            { "level": "warning", "op": "lt", "value": 8 },
+            { "level": "critical", "op": "lt", "value": 5 }
+          ],
+          "affects": ["position", "navigation"],
+          "analysis": [
+            { "condition": "satellites_used 下降 && eph 升高", "meaning": "GPS 信号质量下降" }
+          ],
+          "related": ["vehicle_gps_position.eph"]
+        },
+        "fix_type": {
+          "description": "定位类型：0=无 1=2D 2=3D 3=DGPS 4=RTK 浮点 5=RTK 固定",
+          "unit": "enum",
+          "affects": ["position"]
+        },
+        "eph": {
+          "description": "水平精度因子/误差估计（GPS 报告，米）",
+          "unit": "m",
+          "affects": ["position", "ekf"]
+        },
+        "epv": {
+          "description": "垂直精度因子/误差估计（GPS 报告，米）",
+          "unit": "m",
+          "affects": ["position"]
+        },
+        "lat": {
+          "description": "纬度（度）",
+          "unit": "deg",
+          "affects": ["position"]
+        },
+        "lon": {
+          "description": "经度（度）",
+          "unit": "deg",
+          "affects": ["position"]
+        },
+        "alt": {
+          "description": "GPS 海拔高度（米，椭球高）",
+          "unit": "m",
+          "affects": ["position"]
+        }
+      }
+    }
+  }
+}

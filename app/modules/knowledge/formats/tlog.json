@@ -1,0 +1,32 @@
+{
+  "format": "tlog",
+  "version": 1,
+  "groups": {
+    "ATTITUDE": {
+      "description": "姿态（MAVLink ATTITUDE 消息）：Roll/Pitch/Yaw 与角速度",
+      "affects": ["attitude", "stability"],
+      "fields": {
+        "Roll": {
+          "description": "横滚角（度）",
+          "unit": "deg",
+          "affects": ["attitude"]
+        },
+        "Pitch": {
+          "description": "俯仰角（度）",
+          "unit": "deg",
+          "affects": ["attitude"]
+        },
+        "Yaw": {
+          "description": "偏航角（度）",
+          "unit": "deg",
+          "affects": ["heading"]
+        },
+        "Yawspeed": {
+          "description": "偏航角速度（度/秒）",
+          "unit": "deg/s",
+          "affects": ["attitude"]
+        }
+      }
+    }
+  }
+}

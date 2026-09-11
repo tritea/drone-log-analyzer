@@ -255,6 +255,22 @@ type BrowseResponse struct {
 	Data   map[string][]float64 `json:"data"`
 }
 
+// SeriesRequest 寻址一条曲线（group.字段）。
+type SeriesRequest struct {
+	Type  string `json:"type"`
+	Field string `json:"field"`
+}
+
+// SeriesResponse 是带时间戳的解码序列，供分析（agent tools / 统计）使用，
+// 不直接下发前端渲染（渲染走 CurveData 的二进制 blob）。Times 为相对日志
+// 起点的秒，跨 group 共用同一原点，可对齐比较。
+type SeriesResponse struct {
+	Type   string    `json:"type"`
+	Field  string    `json:"field"`
+	Times  []float64 `json:"times"`
+	Values []float64 `json:"values"`
+}
+
 type LogDefsResponse struct {
 	Format            string                 `json:"format"`
 	EventNames        map[int]string         `json:"eventNames,omitempty"`

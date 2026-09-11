@@ -21,6 +21,10 @@ type service struct {
 	log      *logparser.LogFile
 	loaded   bool
 	fileName string
+
+	// startMs/startMsSet 缓存当前日志的时间原点（毫秒），见 series.go。
+	startMs    float64
+	startMsSet bool
 }
 
 func New() logservice.Service {
@@ -62,6 +66,8 @@ func (s *service) Load(ctx context.Context, req logservice.LoadRequest) (*logser
 	s.log = log
 	s.loaded = true
 	s.fileName = path
+	s.startMs = log.EarliestBodyTimeMs()
+	s.startMsSet = true
 	s.mu.Unlock()
 
 	runtime.GC()
