@@ -4,7 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useScene3dStore } from '@/modules/scene-3d'
 
 const threeStore = useScene3dStore()
-const { three, threeCurrentTimeLabel, threeTimelinePct, threeEndTimeLabel, threeModeSegments } = storeToRefs(threeStore)
+const { three, threeCurrentTimeLabel, threeTimelinePct, threeEndTimeLabel, threeModeSegments, threeIncidentSegments } = storeToRefs(threeStore)
 const { toggleThreePlayback, seekThreeByPct } = threeStore
 
 const trackEl = ref<HTMLElement | null>(null)
@@ -73,6 +73,13 @@ const onKeyDown = (e: KeyboardEvent): void => {
           :style="{ left: seg.startPct + '%', width: seg.widthPct + '%', background: seg.color }"
           :title="seg.label"
         ></div>
+        <!-- AI 问题时段警示条：纯视觉标记（不拦截拖拽），点击定位走消息卡片/主图标记 -->
+        <div
+          v-for="(seg, i) in threeIncidentSegments"
+          :key="'ai' + i"
+          class="three-range-ai"
+          :style="{ left: seg.startPct + '%', width: seg.widthPct + '%', background: seg.color }"
+        ></div>
         <div class="three-range-ahead" :style="{ left: threeTimelinePct + '%' }"></div>
       </div>
       <div class="three-range-thumb" :style="{ left: threeTimelinePct + '%' }"></div>
@@ -88,3 +95,16 @@ const onKeyDown = (e: KeyboardEvent): void => {
     </select>
   </div>
 </template>
+
+<style scoped>
+/* AI 问题时段警示条：叠在模式分段之上，细边框勾勒 + 半透明填充，不拦截指针 */
+.three-range-ai {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  opacity: 0.55;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1.5px rgba(0, 0, 0, 0.25);
+}
+</style>

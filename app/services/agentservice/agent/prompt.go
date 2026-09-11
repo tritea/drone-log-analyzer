@@ -48,6 +48,15 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
   未直接给出的用 日志起始时间 + 相对秒 推算。若日志无 UTC 基准则只用相对秒并说明。
 - 阈值判定优先依据字段附带的参考阈值；没有阈值依据时明确说明是推断。
 - 结论按置信度排序，给出可执行的检查建议；不确定就直说，不要编造数据。
+- 当结论指出具体问题时段（异常/越限/掉高/失效等），必须在回答的最末尾（所有正文之后）
+  追加一个围栏代码块（围栏开始标记写成三个反引号紧接 incident），内容为 JSON 数组，每项形如：
+  {"startSec": 445.2, "endSec": 458.7, "severity": "high", "title": "突然掉高",
+   "desc": "一句话结论", "fields": ["CTUN.Alt", "BARO.Alt"]}
+  约束：startSec/endSec 用相对日志起点的秒（与工具输出的 timeSec/start/end 同基准）；
+  severity 取 low/medium/high/critical；title 不超过 20 字；fields 为涉及的"分组.字段"名，
+  最多 4 个；只列确有异常、值得人工复核的时段，最多 10 项，按时间升序。
+  该代码块会被前端解析并在折线图/时间轴上打标记，时间与字段名务必准确。
+  没有问题时段时不要输出该代码块。
 `)
 	return b.String()
 }

@@ -23,8 +23,12 @@ export type MarkLine = {
   textColor: string;
   text: string;
   kind?: string;
+  /** 业务回查 id（如 AI 问题时段 id），点击标记时回传给 onMarkClick。 */
+  id?: string;
+  /** tooltip 补充说明（如 AI 问题时段的结论描述）。 */
+  detail?: string;
 };
-export type MarkTooltipItem = { t: number; text: string };
+export type MarkTooltipItem = { t: number; text: string; detail?: string };
 
 export type LineChartOptions = {
   grid: GridMargin;
@@ -32,6 +36,8 @@ export type LineChartOptions = {
   panAxis: 'both' | 'x';
   resolveTooltip?: (t: number) => string | null;
   resolveMarkTooltip?: (items: MarkTooltipItem[], kind: string) => string | null;
+  /** 点击事件标记（kind + 业务 id），用于"跳到问题时段"类联动。 */
+  onMarkClick?: (mark: { t: number; kind: string; id?: string }) => void;
   formatX?: (absMs: number) => string;
   enableToolbar?: boolean;
   lineWidth?: number;

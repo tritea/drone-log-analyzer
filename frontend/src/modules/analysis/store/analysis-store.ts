@@ -22,6 +22,8 @@ import { useFieldsStore } from '@/modules/fields';
 import type { FieldEntriesResponse } from '@/modules/fields/store/field-helpers';
 import { useLogStore } from '@/modules/log';
 import { useScene3dStore } from '@/modules/scene-3d';
+import { useAgentStore } from '@/modules/agent';
+import { SEVERITY_META } from '@/modules/agent/utils/incidents';
 import { useCurveManagerStore, findIndexAt } from '@/modules/curves';
 import { LineChart } from '../renderer/line-chart';
 import type { LineSeries, MarkArea, MarkLine, ValueRange } from '../types';
@@ -213,33 +215,52 @@ export const useAnalysisStore = defineStore('analysis', () => {
   }
 
   function buildMarkAreas(xRange: ValueRange): MarkArea[] {
-    const modes = useLogStore().log.flightModes || [];
-    if (!modes.length || !xRange) return [];
-    const assigned: Record<string, string> = { ...NAMED_MODE_TINT };
-    let paletteIdx = 0;
-    const colorFor = (name: string): string => {
-      const key = name.toUpperCase();
-      if (!assigned[key]) {
-        assigned[key] = MODE_TINT_PALETTE[paletteIdx % MODE_TINT_PALETTE.length];
-        paletteIdx++;
-      }
-      return assigned[key];
-    };
-
     const out: MarkArea[] = [];
-    let i = 0;
-    while (i < modes.length) {
-      const name = modes[i].mode;
-      const rawStart = modes[i].timeMs;
-      let j = i;
-      while (j + 1 < modes.length && modes[j + 1].mode === name) j++;
-      const rawEnd = j + 1 < modes.length ? modes[j + 1].timeMs : xRange.max;
-      if (typeof rawStart === 'number' && typeof rawEnd === 'number' && rawEnd > xRange.min && rawStart < xRange.max) {
-        const start = Math.max(rawStart, xRange.min);
-        const end = Math.min(rawEnd, xRange.max);
-        if (end > start) out.push({ startT: start, endT: end, color: colorFor(name), label: translateMode(name) });
+    if (!xRange) return out;
+    const modes = useLogStore().log.flightModes || [];
+    if (modes.length) {
+      const assigned: Record<string, string> = { ...NAMED_MODE_TINT };
+      let paletteIdx = 0;
+      const colorFor = (name: string): string => {
+        const key = name.toUpperCase();
+        if (!assigned[key]) {
+          assigned[key] = MODE_TINT_PALETTE[paletteIdx % MODE_TINT_PALETTE.length];
+          paletteIdx++;
+        }
+        return assigned[key];
+      };
+
+      let i = 0;
+      while (i < modes.length) {
+        const name = modes[i].mode;
+        const rawStart = modes[i].timeMs;
+        let j = i;
+        while (j + 1 < modes.length && modes[j + 1].mode === name) j++;
+        const rawEnd = j + 1 < modes.length ? modes[j + 1].timeMs : xRange.max;
+        if (typeof rawStart === 'number' && typeof rawEnd === 'number' && rawEnd > xRange.min && rawStart < xRange.max) {
+          const start = Math.max(rawStart, xRange.min);
+          const end = Math.min(rawEnd, xRange.max);
+          if (end > start) out.push({ startT: start, endT: end, color: colorFor(name), label: translateMode(name) });
+        }
+        i = j + 1;
       }
-      i = j + 1;
+    }
+
+    // AI 问题时段：按严重度铺半透明警示带（不带文字，标题走 MarkLine 标签，避免与模式名挤在顶部）
+    const incidents = useAgentStore().incidents;
+    if (incidents.length) {
+      const base = chartBaseTimeMs();
+      for (const inc of incidents) {
+        const s = base + inc.startSec * 1000;
+        const e = base + inc.endSec * 1000;
+        if (e > xRange.min && s < xRange.max && e > s) {
+          out.push({
+            startT: Math.max(s, xRange.min),
+            endT: Math.min(e, xRange.max),
+            color: SEVERITY_META[inc.severity].band,
+          });
+        }
+      }
     }
     return out;
   }
@@ -287,25 +308,51 @@ export const useAnalysisStore = defineStore('analysis', () => {
         return '消息: ' + msg;
       });
     }
+
+    // AI 问题时段：起点竖线标签（第 3 行，颜色按严重度），点击可定位
+    const incidents = useAgentStore().incidents;
+    let aiCount = 0;
+    for (const inc of incidents) {
+      if (aiCount >= MARK_LINE_CAP) break;
+      const t = chartBaseTimeMs() + inc.startSec * 1000;
+      if (t < xmin || t > xmax) continue;
+      const meta = SEVERITY_META[inc.severity];
+      out.push({
+        t,
+        row: 3,
+        color: meta.color,
+        textColor: '#ffffff',
+        text: 'AI: ' + inc.title,
+        kind: 'ai',
+        id: inc.id,
+        detail: `【${meta.label}】${inc.desc || inc.title}${inc.fields.length ? '\n字段：' + inc.fields.join(', ') : ''}`,
+      });
+      aiCount++;
+    }
     return out;
   }
 
-  function buildEventMarkTooltip(items: { t: number; text: string }[], kind: string): string {
+  function buildEventMarkTooltip(items: { t: number; text: string; detail?: string }[], kind: string): string {
     const meta = kind === 'err'
       ? { title: '错误', accent: '#dc2626', prefix: '错误: ' }
       : kind === 'ev'
         ? { title: '事件', accent: '#059669', prefix: '事件: ' }
-        : { title: '消息', accent: '#2563eb', prefix: '消息: ' };
+        : kind === 'ai'
+          ? { title: 'AI 问题时段', accent: '#d97706', prefix: 'AI: ' }
+          : { title: '消息', accent: '#2563eb', prefix: '消息: ' };
 
     const more = items.length > TOOLTIP_MSG_CAP ? items.length - TOOLTIP_MSG_CAP : 0;
     const shown = more ? items.slice(0, TOOLTIP_MSG_CAP) : items;
     const rows = shown
       .map((it) => {
         const txt = it.text.indexOf(meta.prefix) === 0 ? it.text.slice(meta.prefix.length) : it.text;
+        const detail = it.detail
+          ? '<div style="color:#64748b;font-size:11px;margin:1px 0 3px;white-space:pre-line">' + escapeHtml(it.detail) + '</div>'
+          : '';
         return (
           '<div style="display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;align-items:baseline;padding:2px 0">' +
           '<span style="color:#94a3b8;font:10px/1.4 Consolas,"SF Mono",monospace;white-space:nowrap">' + formatTime(it.t, false) + '</span>' +
-          '<span style="min-width:0;overflow-wrap:anywhere">' + escapeHtml(txt) + '</span></div>'
+          '<span style="min-width:0;overflow-wrap:anywhere">' + escapeHtml(txt) + detail + '</span></div>'
         );
       })
       .join('');
@@ -409,6 +456,11 @@ export const useAnalysisStore = defineStore('analysis', () => {
         lineWidth: chart.value.lineWidth,
         resolveTooltip: (t) => (chart.value.tooltip ? buildTooltip(t) : null),
         resolveMarkTooltip: (items, kind) => buildEventMarkTooltip(items, kind),
+        onMarkClick: (m) => {
+          if (m.kind !== 'ai' || !m.id) return;
+          const inc = useAgentStore().incidents.find((i) => i.id === m.id);
+          if (inc) useAgentStore().focusIncident(inc);
+        },
         formatX: (ms) => formatTime(ms, false),
       });
       applyChartOptions();
@@ -837,6 +889,11 @@ export const useAnalysisStore = defineStore('analysis', () => {
     if (runtime.mainChart) runtime.mainChart.resetZoom();
   }
 
+  /** 聚焦绝对时间窗（如 AI 问题时段）：主图 X 缩放到该窗口，带边距、可撤销。 */
+  function focusChartWindow(t0: number, t1: number): void {
+    if (runtime.mainChart && t1 > t0) runtime.mainChart.focusXWindow({ min: t0, max: t1 });
+  }
+
   // ═══════════════════════ 12. 派生值与格式化 ═══════════════════════
   const visibleCurves = computed<Curve[]>(() => chart.value.activeCurves.filter((c) => c.visible));
   const visiblePointCount = computed<number>(() =>
@@ -933,6 +990,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     setBoxZoomActive,
     undoZoom,
     resetZoom,
+    focusChartWindow,
     buildCurve,
     ensureCurveBinary,
     curveKey,

@@ -99,7 +99,7 @@ type BandBlock = {
   startT: number;
   endT: number;
 };
-type EventTag = { el: HTMLDivElement; t: number; row: number; kind: string; text: string };
+type EventTag = { el: HTMLDivElement; t: number; row: number; kind: string; text: string; id?: string; detail?: string };
 
 /**
  * 专用折线图：Three.js 正交相机 + DOM overlay。
@@ -569,11 +569,15 @@ export class LineChart {
       el.className = `gpu-event-label gpu-event-row-${ln.row}`;
       el.textContent = ln.text;
       const hex = `#${parseColor(ln.color).color.getHexString()}`;
-      el.style.cssText = `position:absolute;font:600 10px -apple-system,"Microsoft YaHei",sans-serif;pointer-events:auto;white-space:nowrap;background:${hex};border-radius:999px;padding:1px 7px;color:#ffffff;box-shadow:0 1px 2px rgba(15,23,42,0.18);display:none;cursor:default;`;
+      const clickable = !!this.opts.onMarkClick;
+      el.style.cssText = `position:absolute;font:600 10px -apple-system,"Microsoft YaHei",sans-serif;pointer-events:auto;white-space:nowrap;background:${hex};border-radius:999px;padding:1px 7px;color:#ffffff;box-shadow:0 1px 2px rgba(15,23,42,0.18);display:none;cursor:${clickable ? 'pointer' : 'default'};`;
       el.addEventListener('mouseenter', () => this.onTagHover(kind, el));
       el.addEventListener('mouseleave', () => this.scheduleHideEventTip());
+      if (clickable) {
+        el.addEventListener('click', () => this.opts.onMarkClick?.({ t: ln.t, kind, id: ln.id }));
+      }
       this.overlay.appendChild(el);
-      this.tags.push({ el, t: ln.t, row: ln.row, kind, text: ln.text });
+      this.tags.push({ el, t: ln.t, row: ln.row, kind, text: ln.text, id: ln.id, detail: ln.detail });
     }
   }
 
@@ -772,6 +776,22 @@ export class LineChart {
     this.viewport = { ...this.initialViewport };
     this.applyViewport(false);
     this.emit('restore');
+  }
+
+  /**
+   * 聚焦一个绝对时间窗（如 AI 问题时段）：X 缩放到该窗口（带 15% 边距，
+   * 钳制在数据范围内），Y 保持当前量程；入历史栈可撤销。
+   */
+  focusXWindow(x: ValueRange): void {
+    const iv = this.initialViewport;
+    const span = Math.max(x.max - x.min, 1);
+    const pad = span * 0.15;
+    const xMin = Math.max(x.min - pad - this.baseTimeMs, iv.xMin);
+    const xMax = Math.min(x.max + pad - this.baseTimeMs, iv.xMax);
+    if (!(xMax > xMin)) return;
+    this.pushHistory();
+    this.viewport = { ...this.viewport, xMin, xMax };
+    this.applyViewport(true);
   }
 
   // ---- 渲染循环 ----
@@ -1020,7 +1040,7 @@ export class LineChart {
       if (ml.kind !== kind || ml.el.style.display === 'none') continue;
       const mlL = ml.el.offsetLeft;
       const mlR = ml.el.offsetLeft + ml.el.offsetWidth;
-      if (mlL < r && mlR > l) items.push({ t: ml.t, text: ml.text });
+      if (mlL < r && mlR > l) items.push({ t: ml.t, text: ml.text, detail: ml.detail });
     }
     items.sort((a, b) => a.t - b.t);
     const html = this.opts.resolveMarkTooltip(items, kind);

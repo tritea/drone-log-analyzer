@@ -1,8 +1,12 @@
 import { defineStore } from 'pinia';
-import { computed, reactive } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import { agentClient, onAgentEvent } from '@/services/agent';
 import type { AgentEvent, ChatMessage, LlmConfig } from '@/services/agent';
 import { useLogStore } from '@/modules/log';
+import { useAnalysisStore } from '@/modules/analysis';
+import { useScene3dStore } from '@/modules/scene-3d';
+import type { Incident } from '../utils/incidents';
+import { parseIncidents } from '../utils/incidents';
 import { buildMarkdown, buildPrintHtml, exportFileName, printHtml } from '../utils/export';
 
 /** 一条工具调用的展示态（进行中/已完成）。 */
@@ -55,6 +59,38 @@ export const useAgentStore = defineStore('agent', () => {
     if (cfg.apiKey) return true;
     return /\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(cfg.baseUrl);
   });
+
+  /** AI 分析结论中的问题时段（跨消息去重合并、按时间升序）：供主图/时间轴标记与 PDF 图表。 */
+  const incidents = computed<Incident[]>(() => {
+    const seen = new Set<string>();
+    const out: Incident[] = [];
+    for (const m of agent.messages) {
+      if (m.role !== 'assistant' || !m.content) continue;
+      for (const inc of parseIncidents(m.content)) {
+        if (seen.has(inc.id)) continue;
+        seen.add(inc.id);
+        out.push(inc);
+      }
+    }
+    return out.sort((a, b) => a.startSec - b.startSec);
+  });
+
+  // 问题时段变化（新分析完成/清空会话/切换日志）→ 刷新主图警示带与标记
+  watch(incidents, () => {
+    useAnalysisStore().rebuildChart();
+  });
+
+  /** 问题时段相对秒 → 绝对 ms（锚定曲线日志起点，与主图/回放同一时间轴）。 */
+  function incidentAbsMs(sec: number): number {
+    return useAnalysisStore().chartBaseTimeMs() + sec * 1000;
+  }
+
+  /** 定位问题时段：3D 播放跳到时段起点，主图缩放到该窗口（供消息卡片/图表标记点击）。 */
+  function focusIncident(inc: Incident): void {
+    if (!inc) return;
+    useScene3dStore().seekThreeToTime(incidentAbsMs(inc.startSec));
+    useAnalysisStore().focusChartWindow(incidentAbsMs(inc.startSec), incidentAbsMs(inc.endSec));
+  }
 
   let unsubEvents: (() => void) | null = null;
   let initialized = false;
@@ -218,6 +254,8 @@ export const useAgentStore = defineStore('agent', () => {
   return {
     agent,
     llmConfigured,
+    incidents,
+    focusIncident,
     initialize,
     dispose,
     refreshHistory,

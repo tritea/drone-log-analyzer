@@ -1,12 +1,13 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type { ChatMessage } from '@/services/agent';
+import { stripIncidentBlock } from './incidents';
 
-/** 会话 → Markdown 文本：只导出助手回答内容（多轮依次拼接）。 */
+/** 会话 → Markdown 文本：只导出助手回答内容（多轮依次拼接；机读 incident 块剥离，问题时段已在正文中以表格呈现）。 */
 export function buildMarkdown(messages: ChatMessage[]): string {
   return messages
     .filter((m) => m.role === 'assistant' && m.content)
-    .map((m) => m.content)
+    .map((m) => stripIncidentBlock(m.content))
     .join('\n\n---\n\n');
 }
 
@@ -14,7 +15,7 @@ export function buildMarkdown(messages: ChatMessage[]): string {
 export function buildPrintHtml(messages: ChatMessage[]): string {
   const blocks = messages
     .filter((m) => m.role === 'assistant' && m.content)
-    .map((m) => DOMPurify.sanitize(marked.parse(m.content, { async: false }) as string))
+    .map((m) => DOMPurify.sanitize(marked.parse(stripIncidentBlock(m.content), { async: false }) as string))
     .join('\n<hr>\n');
   return `<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <title>AI 分析结果</title>

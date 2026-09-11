@@ -16,6 +16,8 @@ import { showToast } from '@/modules/shared/ui-store';
 import { isEditableTarget } from '@/modules/shared/utils/dom';
 import { useUiStore } from '@/modules/shared/ui-store';
 import { useAnalysisStore } from '@/modules/analysis';
+import { useAgentStore } from '@/modules/agent';
+import { SEVERITY_META } from '@/modules/agent/utils/incidents';
 import { useCommandsStore } from '@/modules/commands';
 import { useLogStore } from '@/modules/log';
 import { useMapStateStore } from '@/modules/shared/map-state';
@@ -254,6 +256,29 @@ export const useScene3dStore = defineStore('scene-3d', () => {
         }
       }
       i = j + 1;
+    }
+    return out;
+  });
+
+  /** AI 问题时段在时间轴上的警示条（与模式分段同坐标系；仅展示，定位走消息卡片/主图标记点击）。 */
+  const threeIncidentSegments = computed<{ startPct: number; widthPct: number; color: string }[]>(() => {
+    var incidents = useAgentStore().incidents;
+    var r = threePlaybackRange.value;
+    if (!incidents.length || !r.span) return [];
+    var base = useAnalysisStore().chartBaseTimeMs();
+    var out: { startPct: number; widthPct: number; color: string }[] = [];
+    for (var inc of incidents) {
+      var s = base + inc.startSec * 1000;
+      var e = base + inc.endSec * 1000;
+      if (e <= r.min || s >= r.max) continue;
+      var start = Math.max(s, r.min);
+      var end = Math.min(e, r.max);
+      if (end <= start) continue;
+      out.push({
+        startPct: ((start - r.min) / r.span) * 100,
+        widthPct: ((end - start) / r.span) * 100,
+        color: SEVERITY_META[inc.severity].color
+      });
     }
     return out;
   });
@@ -2344,6 +2369,15 @@ export const useScene3dStore = defineStore('scene-3d', () => {
       if (useUiStore().ui.mainView === 'three') renderThreeView();
   }
 
+    // 按绝对毫秒定位回放（AI 问题时段跳转等）：钳到播放区间并暂停。
+  function seekThreeToTime(timeMs: number): void {
+      var r = threePlaybackRange.value;
+      three.value.playback.timeMs = Math.max(r.min, Math.min(r.max, timeMs));
+      three.value.playback.playing = false;
+      updateThreeCurrent();
+      if (useUiStore().ui.mainView === 'three') renderThreeView();
+  }
+
   function formatMetric(value: number | null, unit: string): string {
       if (value === null || value === undefined || !isFinite(value)) return '-';
       var s = Number(value).toFixed(2);
@@ -3770,6 +3804,7 @@ export const useScene3dStore = defineStore('scene-3d', () => {
     // getters
     threeTimeRange, threePlaybackRange, threeTimelineValue, threeTimelinePct,
     threeCurrentTimeLabel, threeDebugInfo, threeEndTimeLabel, threeModeSegments,
+    threeIncidentSegments,
     // actions
     registerThreeMain, registerThreeAttitude, registerThreePlayhead, registerThreePlayheadTag,
     ensureThreeView, positionAttitudeCamera, createThreeView, applyLighting,
@@ -3799,7 +3834,7 @@ export const useScene3dStore = defineStore('scene-3d', () => {
     rebuildAttitudeAxes, rebuildWindArrow, updateWindArrow, updateAttitudeArcs,
     loadThreeAttributeDroneModel, buildTierMaterial, applyMaterialTier, applyExtraDroneModel,
     collectPropellers, advanceThreePlayback, toggleThreePlayback, onThreeTimelineInput,
-    seekThreeByPct, formatMetric, rcAvailable,
+    seekThreeByPct, seekThreeToTime, formatMetric, rcAvailable,
     computeRcInvert, rcCorrSign, rcNorm, rcKnobStyleX,
     rcKnobStyleY, formatPwm, motorsAvailable, currentMotors, currentVoltage,
     motorBarPct, motorSaturated, bakeEnv, ensureThreeEnv,
