@@ -67,6 +67,16 @@ export const useAgentStore = defineStore('agent', () => {
     await Promise.all([loadHistory(), loadLlmConfig()]);
   }
 
+  /**
+   * 重新拉取会话历史。面板常驻挂载，initialize 只在应用启动时跑一次——
+   * 那时日志多半还没加载（后端按无日志返回空会话）；面板每次真正打开、
+   * 以及切换日志文件时都要刷新，否则一直显示启动时的空缓存。
+   */
+  async function refreshHistory(): Promise<void> {
+    if (agent.streaming.active) return;
+    await loadHistory();
+  }
+
   function dispose(): void {
     unsubEvents?.();
     unsubEvents = null;
@@ -210,6 +220,7 @@ export const useAgentStore = defineStore('agent', () => {
     llmConfigured,
     initialize,
     dispose,
+    refreshHistory,
     send,
     stop,
     clearSession,

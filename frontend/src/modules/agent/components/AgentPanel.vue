@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useUiStore } from '@/modules/shared/ui-store'
 import { useLogStore } from '@/modules/log'
@@ -70,6 +70,15 @@ function onDragStart(ev: PointerEvent): void {
 onMounted(() => {
   void agentStore.initialize()
 })
+
+// 面板真正打开时、切换日志文件时重新拉取会话（历史按日志隔离）。
+watch(
+  () => [ui.value.agentOpen, log.value.fileName] as const,
+  ([open]) => {
+    if (open) void agentStore.refreshHistory()
+  },
+  { immediate: true },
+)
 
 onBeforeUnmount(() => {
   agentStore.dispose()
