@@ -163,6 +163,7 @@ watch(() => ui.value.mainView, () => {
     </div>
 
     <div class="topbar-actions">
+      <AppButton size="xs" :active="ui.agentOpen" title="AI 日志分析" @click="ui.agentOpen = !ui.agentOpen">AI 分析</AppButton>
       <AppButton size="xs" title="查看消息、命令和参数" @click="ui.recordOpen = true">记录</AppButton>
       <AppButton icon="settings" icon-only title="设置" @click="settingsOpen = true" />
     </div>

@@ -26,6 +26,10 @@ export function GetFlightMetrics() {
   return window['go']['wails']['ConfigAPI']['GetFlightMetrics']();
 }
 
+export function GetLlmConfig() {
+  return window['go']['wails']['ConfigAPI']['GetLlmConfig']();
+}
+
 export function GetSettings() {
   return window['go']['wails']['ConfigAPI']['GetSettings']();
 }
@@ -60,6 +64,10 @@ export function SaveFieldEntry(arg1) {
 
 export function SaveFlightMetrics(arg1) {
   return window['go']['wails']['ConfigAPI']['SaveFlightMetrics'](arg1);
+}
+
+export function SaveLlmConfig(arg1) {
+  return window['go']['wails']['ConfigAPI']['SaveLlmConfig'](arg1);
 }
 
 export function SaveModelGroup(arg1) {

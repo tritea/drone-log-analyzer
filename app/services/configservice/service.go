@@ -3,6 +3,8 @@ package configservice
 import (
 	"context"
 	"errors"
+
+	appmodel "drone-log-analyzer/app/model"
 )
 
 var (
@@ -22,6 +24,9 @@ var (
 type Service interface {
 	GetSettings(ctx context.Context) (*SettingsResponse, error)
 	SaveSettings(ctx context.Context, settings map[string]any) error
+
+	GetLlmConfig(ctx context.Context) (*LlmConfigResponse, error)
+	SaveLlmConfig(ctx context.Context, req appmodel.LlmConfig) (*LlmConfigResponse, error)
 
 	SetCurrentFormat(ctx context.Context, format string) error
 

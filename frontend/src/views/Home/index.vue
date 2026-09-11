@@ -11,6 +11,7 @@ import LogInspector from '@/modules/log/components/LogInspector.vue'
 import FieldDelete from '@/modules/fields/components/FieldDelete.vue'
 import FieldExport from '@/modules/fields/components/FieldExport.vue'
 import SimplePicker from '@/modules/shared/components/SimplePicker.vue'
+import { AgentPanel } from '@/modules/agent'
 
 const { ui } = storeToRefs(useUiStore())
 const logStore = useLogStore()
@@ -35,5 +36,6 @@ const { log } = storeToRefs(logStore)
   <SimplePicker />
   <LogInspector />
   <LogLoadingOverlay />
+  <AgentPanel />
 </div>
 </template>

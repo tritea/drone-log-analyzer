@@ -13,6 +13,7 @@ export const useUiStore = defineStore('ui', () => {
     toast: null,
     recordOpen: false,
     recordTab: 'messages',
+    agentOpen: false,
   }) as UiState;
 
   return { ui };

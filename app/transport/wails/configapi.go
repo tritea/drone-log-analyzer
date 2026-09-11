@@ -3,6 +3,7 @@ package wails
 import (
 	"context"
 
+	appmodel "drone-log-analyzer/app/model"
 	"drone-log-analyzer/app/services/configservice"
 )
 
@@ -16,6 +17,14 @@ func (a *ConfigAPI) GetSettings() (*configservice.SettingsResponse, error) {
 
 func (a *ConfigAPI) SaveSettings(settings map[string]any) error {
 	return a.Svc.SaveSettings(context.Background(), settings)
+}
+
+func (a *ConfigAPI) GetLlmConfig() (*configservice.LlmConfigResponse, error) {
+	return a.Svc.GetLlmConfig(context.Background())
+}
+
+func (a *ConfigAPI) SaveLlmConfig(req appmodel.LlmConfig) (*configservice.LlmConfigResponse, error) {
+	return a.Svc.SaveLlmConfig(context.Background(), req)
 }
 
 func (a *ConfigAPI) SetCurrentFormat(format string) error {

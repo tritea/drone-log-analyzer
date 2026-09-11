@@ -479,6 +479,7 @@ export interface UiState {
   toast: ToastState | null;
   recordOpen: boolean;
   recordTab: RecordTab;
+  agentOpen: boolean;
 }
 
 export type RecordTab = 'messages' | 'commands' | 'mavlink' | 'parameters';

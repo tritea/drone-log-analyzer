@@ -1,0 +1,208 @@
+// Package agent 是 agentservice 的 eino 实现：装配 ChatModelAgent（ReAct
+// 循环）+ 日志工具集，把事件流翻译为前端可渲染的 AgentEvent。
+package agent
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"sync"
+
+	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/schema"
+
+	"drone-log-analyzer/app/modules/knowledge"
+	"drone-log-analyzer/app/services/agentservice"
+	"drone-log-analyzer/app/services/agentservice/tools"
+	"drone-log-analyzer/app/services/logservice"
+)
+
+var errEmptyMessage = errors.New("empty message")
+
+// Deps 是装配依赖。Llm 由 main 把 configservice 适配进来；Sink 由传输层
+// 注入（Wails EventsEmit），可为 nil（无前端时静默）。
+type Deps struct {
+	Log  logservice.Service
+	Llm  agentservice.LlmConfigProvider
+	Sink agentservice.EventSink
+}
+
+type service struct {
+	deps Deps
+	sess *session
+
+	mu     sync.Mutex
+	busy   bool
+	cancel context.CancelFunc
+}
+
+// New 构造 agentservice.Service。
+func New(deps Deps) agentservice.Service {
+	return &service{deps: deps, sess: newSession()}
+}
+
+func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agentservice.ChatResponse, error) {
+	msg := strings.TrimSpace(req.Message)
+	if msg == "" {
+		return nil, errEmptyMessage
+	}
+	if !s.tryBegin() {
+		return nil, agentservice.ErrAgentBusy
+	}
+	defer s.end()
+
+	cfg, err := s.deps.Llm.LlmConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !validateLlmConfig(cfg) {
+		return nil, agentservice.ErrLlmNotConfigured
+	}
+	st, err := s.deps.Log.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !st.Loaded {
+		return nil, agentservice.ErrNoLogLoaded
+	}
+	sum, err := s.deps.Log.Summary(ctx)
+	if err != nil {
+		return nil, err
+	}
+	class := knowledge.Class(sum.VehicleType, sum.Frame, sum.Airframe)
+
+	built, err := tools.Build(tools.Deps{Log: s.deps.Log, Format: sum.Format, Class: class})
+	if err != nil {
+		return nil, err
+	}
+	cm, err := buildChatModel(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	maxIter := cfg.MaxSteps
+	if maxIter <= 0 {
+		maxIter = 15
+	}
+	ag, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		Instruction:   buildSystemPrompt(sum, class),
+		Model:         cm,
+		ToolsConfig:   adk.ToolsConfig{ToolsNodeConfig: compose.ToolsNodeConfig{Tools: built}},
+		MaxIterations: maxIter,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	runCtx, cancel := context.WithCancel(ctx)
+	s.setCancel(cancel)
+	defer cancel()
+
+	input := s.sess.snapshot()
+	input = append(input, schema.UserMessage(msg))
+	r := newRun(s.deps.Sink)
+
+	iter := ag.Run(runCtx, &adk.AgentInput{Messages: input, EnableStreaming: true})
+	var runErr error
+	for {
+		ev, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if ev.Err != nil {
+			runErr = ev.Err
+			break
+		}
+		if ev.Output == nil || ev.Output.MessageOutput == nil {
+			continue
+		}
+		if err := r.handle(ev.Output.MessageOutput); err != nil {
+			runErr = err
+			break
+		}
+	}
+
+	answer := r.finalAnswer()
+	switch {
+	case runErr == nil:
+	case errors.Is(runErr, context.Canceled):
+		if answer == "" {
+			s.emitError("已停止")
+			return nil, runErr
+		}
+		answer += "\n\n（本轮被手动停止，以上为已生成的部分）"
+	default:
+		s.emitError(runErr.Error())
+		return nil, runErr
+	}
+	if answer == "" {
+		answer = "（模型没有给出回答，可重试或换模型）"
+	}
+
+	final := agentservice.ChatMessage{
+		Role:      "assistant",
+		Content:   answer,
+		ToolTrace: r.trace(),
+	}
+	// 历史回填：user + 本轮完整交错序列（assistant/tool 保留 ToolCalls 供
+	// 下一轮上下文）。被停止的半轮也保留已生成部分。
+	round := make([]*schema.Message, 0, len(r.msgs)+1)
+	round = append(round, schema.UserMessage(msg))
+	round = append(round, r.msgs...)
+	s.sess.extend(round)
+	s.emitFinal(final)
+	return &agentservice.ChatResponse{Message: final}, nil
+}
+
+func (s *service) Stop(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cancel != nil {
+		s.cancel()
+	}
+	return nil
+}
+
+func (s *service) History(ctx context.Context) (*agentservice.HistoryResponse, error) {
+	return &agentservice.HistoryResponse{Messages: s.sess.toDTO()}, nil
+}
+
+func (s *service) Clear(ctx context.Context) error {
+	s.sess.reset()
+	return nil
+}
+
+func (s *service) tryBegin() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.busy {
+		return false
+	}
+	s.busy = true
+	return true
+}
+
+func (s *service) end() {
+	s.mu.Lock()
+	s.busy = false
+	s.cancel = nil
+	s.mu.Unlock()
+}
+
+func (s *service) setCancel(cancel context.CancelFunc) {
+	s.mu.Lock()
+	s.cancel = cancel
+	s.mu.Unlock()
+}
+
+func (s *service) emitError(text string) {
+	if s.deps.Sink != nil {
+		s.deps.Sink(agentservice.AgentEvent{Type: "error", Error: text})
+	}
+}
+
+func (s *service) emitFinal(msg agentservice.ChatMessage) {
+	if s.deps.Sink != nil {
+		s.deps.Sink(agentservice.AgentEvent{Type: "final", Message: &msg})
+	}
+}

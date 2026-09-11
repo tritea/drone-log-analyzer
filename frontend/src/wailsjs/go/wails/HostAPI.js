@@ -17,3 +17,7 @@ export function ImportTileset(arg1) {
 export function PickLogPath() {
   return window['go']['wails']['HostAPI']['PickLogPath']();
 }
+
+export function Startup(arg1) {
+  return window['go']['wails']['HostAPI']['Startup'](arg1);
+}

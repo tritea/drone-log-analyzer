@@ -1,8 +1,18 @@
 package configservice
 
+import (
+	appmodel "drone-log-analyzer/app/model"
+)
+
 type SettingsResponse struct {
 	Settings map[string]any `json:"settings"`
 	Path     string         `json:"path"`
+}
+
+// LlmConfigResponse 回传 Agent 服务的 LLM 接入配置及其持久化路径。
+type LlmConfigResponse struct {
+	Config *appmodel.LlmConfig `json:"config"`
+	Path   string              `json:"path"`
 }
 
 type FlightMetricsResponse struct {

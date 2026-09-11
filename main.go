@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"log"
 
 	appcfg "drone-log-analyzer/app/config"
+	appmodel "drone-log-analyzer/app/model"
 	_ "drone-log-analyzer/app/modules/parser/dataflash"
 	_ "drone-log-analyzer/app/modules/parser/tlog"
 	_ "drone-log-analyzer/app/modules/parser/ulog"
+	"drone-log-analyzer/app/services/agentservice/agent"
+	"drone-log-analyzer/app/services/configservice"
 	"drone-log-analyzer/app/services/configservice/jsonstore"
 	"drone-log-analyzer/app/services/logservice/dataflash"
 	"drone-log-analyzer/app/services/mapservice/tilecache"
@@ -22,6 +26,21 @@ import (
 
 //go:embed all:frontend/dist
 var staticFiles embed.FS
+
+// llmConfigAdapter 把 configservice 适配为 agentservice 的配置源，
+// 避免 service 之间直接 import（组合发生在 main）。
+type llmConfigAdapter struct{ svc configservice.Service }
+
+func (a llmConfigAdapter) LlmConfig(ctx context.Context) (*appmodel.LlmConfig, error) {
+	resp, err := a.svc.GetLlmConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil || resp.Config == nil {
+		return nil, nil
+	}
+	return resp.Config, nil
+}
 
 func main() {
 
@@ -40,6 +59,14 @@ func main() {
 		_ = mapSvc.Close()
 	}()
 
+	agentAPI := &wailsapp.AgentAPI{}
+	agentSvc := agent.New(agent.Deps{
+		Log:  logSvc,
+		Llm:  llmConfigAdapter{svc: cfgSvc},
+		Sink: agentAPI.Emit,
+	})
+	agentAPI.Svc = agentSvc
+
 	host := &wailsapp.HostAPI{Log: logSvc}
 
 	router := httptransport.Router(mapSvc, cfgSvc, nil)
@@ -55,11 +82,15 @@ func main() {
 			Handler: router,
 		},
 
-		OnStartup: host.Startup,
+		OnStartup: func(ctx context.Context) {
+			host.Startup(ctx)
+			agentAPI.Startup(ctx)
+		},
 		Bind: []any{
 			&wailsapp.LogAPI{Svc: logSvc},
 			&wailsapp.MapAPI{Svc: mapSvc},
 			&wailsapp.ConfigAPI{Svc: cfgSvc},
+			agentAPI,
 			host,
 		},
 	})
