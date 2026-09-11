@@ -15,14 +15,15 @@ type flightEventsInput struct {
 }
 
 type recordEntry struct {
-	TimeSec float64 `json:"timeSec"`
 	Time    string  `json:"time,omitempty"` // 绝对时刻（本地时区；空=无 UTC 基准）
+	TimeSec float64 `json:"timeSec"`
 	Text    string  `json:"text"`
 }
 
 type flightEventsOutput struct {
 	Kind      string        `json:"kind"`
-	Count     int           `json:"count"` // 命中总数（entries 可能被截断）
+	TimeBase  string        `json:"timeBase,omitempty"` // timeSec=0 对应的绝对时刻（本地时区）
+	Count     int           `json:"count"`              // 命中总数（entries 可能被截断）
 	Truncated bool          `json:"truncated,omitempty"`
 	Entries   []recordEntry `json:"entries"`
 }
@@ -32,9 +33,10 @@ type flightEventsOutput struct {
 func flightEventsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_records",
 		"获取飞行过程记录：kind=errors（错误）、events（事件，如解锁/上锁）、"+
-			"modes（模式切换序列）。时间单位秒、相对日志起点。",
+			"modes（模式切换序列）。每条含绝对时刻 time（本地时区）与相对秒 timeSec；"+
+			"汇总时间线时以绝对时刻为准。",
 		func(ctx context.Context, in flightEventsInput) (flightEventsOutput, error) {
-			out := flightEventsOutput{Kind: strings.ToLower(strings.TrimSpace(in.Kind))}
+			out := flightEventsOutput{Kind: strings.ToLower(strings.TrimSpace(in.Kind)), TimeBase: deps.Abs.Start()}
 			switch out.Kind {
 			case "errors":
 				errs, err := deps.Log.Errors(ctx)
