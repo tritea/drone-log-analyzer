@@ -16,6 +16,13 @@ const props = defineProps<{
 
 const root = ref<HTMLElement | null>(null)
 
+/** 滚动策略：任何更新（新消息/流式增量）都自动置底。 */
+async function scrollToBottom(): Promise<void> {
+  await nextTick()
+  const el = root.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+
 /** 本轮已运行秒数：长时间无输出时让用户确认仍在工作。 */
 const elapsed = ref(0)
 let timer: number | null = null
@@ -43,30 +50,9 @@ watch(
 
 onBeforeUnmount(stopTimer)
 
-/**
- * 滚动策略：流式增量只在"贴底"（距底 <80px）时跟随——用户主动上滚回看
- * 时不打扰；新消息到达（发送/回复完成）才强制滚到底。
- */
-const NEAR_BOTTOM_PX = 80
-
-async function scrollToBottom(force: boolean): Promise<void> {
-  await nextTick()
-  const el = root.value
-  if (!el) return
-  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
-  if (force || nearBottom) {
-    el.scrollTop = el.scrollHeight
-  }
-}
-
 watch(
-  () => [props.messages.length] as const,
-  () => void scrollToBottom(true),
-)
-
-watch(
-  () => [props.streamingText, props.streamingReasoning, props.streamingTools.length] as const,
-  () => void scrollToBottom(false),
+  () => [props.messages.length, props.streamingText, props.streamingReasoning, props.streamingTools.length] as const,
+  () => void scrollToBottom(),
 )
 </script>
 
