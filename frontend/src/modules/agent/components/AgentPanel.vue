@@ -149,7 +149,9 @@ onBeforeUnmount(() => {
 }
 .agent-head strong { font-size: 14px; color: var(--text); }
 .agent-head-sub { font-size: 12px; color: var(--text3); flex: 1; }
-.agent-head-actions { display: flex; gap: 4px; }
+.agent-head-actions { display: flex; gap: 4px; align-items: center; }
+/* 面板头混排 icon-only（28×28）与文本（默认 24 高）按钮，统一高度对齐。 */
+.agent-head-actions :deep(.app-btn.is-xs) { height: 28px; }
 .agent-error {
   margin: 0;
   padding: 6px 12px;
