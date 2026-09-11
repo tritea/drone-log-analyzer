@@ -7,7 +7,7 @@ import { useAnalysisStore } from '@/modules/analysis';
 import { useScene3dStore } from '@/modules/scene-3d';
 import type { Incident } from '../utils/incidents';
 import { parseIncidents } from '../utils/incidents';
-import { buildMarkdown, buildPrintHtml, exportFileName, printHtml } from '../utils/export';
+import { buildMarkdown, buildPrintHtml, buildIncidentChartsHtml, exportFileName, printHtml } from '../utils/export';
 
 /** 一条工具调用的展示态（进行中/已完成）。 */
 export interface ToolCallView {
@@ -204,9 +204,15 @@ export const useAgentStore = defineStore('agent', () => {
     if (saved) agent.error = '';
   }
 
-  /** 导出 PDF：打印对话框里选"另存为 PDF"；只含助手回答内容。 */
-  function exportPdf(): void {
-    printHtml(buildPrintHtml(agent.messages));
+  /** 导出 PDF：打印对话框里选"另存为 PDF"；助手回答 + 问题时段字段折线图（本地曲线数据绘制）。 */
+  async function exportPdf(): Promise<void> {
+    let appendix = '';
+    try {
+      appendix = await buildIncidentChartsHtml(incidents.value);
+    } catch (err) {
+      agent.error = `问题时段图表生成失败（已仅导出文本）：${errText(err)}`;
+    }
+    printHtml(buildPrintHtml(agent.messages, appendix));
   }
 
   async function clearSession(): Promise<void> {
