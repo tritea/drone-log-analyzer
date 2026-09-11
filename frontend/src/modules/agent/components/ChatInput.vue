@@ -16,9 +16,10 @@ const emit = defineEmits<{
 const text = ref('')
 
 function submit(): void {
-  if (props.streaming || props.disabled) return
+  if (props.disabled) return
   const value = text.value.trim()
   if (!value) return
+  // 生成期间不拦：父级 store 会把消息排队，本轮结束后自动续发。
   emit('send', value)
   text.value = ''
 }
@@ -36,19 +37,16 @@ function onKeydown(ev: KeyboardEvent): void {
     <textarea
       v-model="text"
       rows="2"
-      :placeholder="disabled ? disabledHint : '输入问题，Enter 发送，Shift+Enter 换行'"
+      :placeholder="disabled ? disabledHint : streaming ? '可继续补充信息，本轮完成后自动发送' : '输入问题，Enter 发送，Shift+Enter 换行'"
       :disabled="disabled"
       @keydown="onKeydown"
     ></textarea>
     <div class="chat-input-actions">
       <span v-if="disabled" class="chat-input-hint">{{ disabledHint }}</span>
-      <AppButton
-        v-if="streaming"
-        size="xs"
-        variant="danger"
-        title="停止生成"
-        @click="emit('stop')"
-      >停止</AppButton>
+      <template v-if="streaming">
+        <AppButton size="xs" variant="danger" title="停止生成" @click="emit('stop')">停止</AppButton>
+        <AppButton size="xs" variant="primary" :disabled="disabled || !text.trim()" title="排队发送，本轮完成后自动发出" @click="submit">排队发送</AppButton>
+      </template>
       <AppButton
         v-else
         size="xs"

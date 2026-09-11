@@ -11,6 +11,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   toolTrace?: ToolCallTrace[];
+  /** 展示态：生成期间排队补充的消息，尚未真正发给后端。 */
+  queued?: boolean;
 }
 
 export interface AgentEvent {

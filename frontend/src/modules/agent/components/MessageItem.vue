@@ -10,7 +10,10 @@ defineProps<{ message: ChatMessage }>()
     <div v-if="message.toolTrace?.length" class="msg-tools">
       <ToolCallCard v-for="(t, i) in message.toolTrace" :key="i" :trace="t" />
     </div>
-    <div class="msg-bubble">{{ message.content }}</div>
+    <div class="msg-bubble" :class="{ 'is-queued': message.queued }">
+      {{ message.content }}
+      <span v-if="message.queued" class="queued-tag">排队中</span>
+    </div>
   </div>
 </template>
 
@@ -39,6 +42,20 @@ defineProps<{ message: ChatMessage }>()
   background: var(--blue);
   color: #fff;
   border-bottom-right-radius: 4px;
+}
+.msg.user .msg-bubble.is-queued {
+  background: var(--blue-soft);
+  color: var(--text2);
+  border: 1px dashed var(--blue);
+}
+.queued-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(37, 99, 235, 0.12);
+  vertical-align: 1px;
 }
 .msg.assistant .msg-bubble {
   background: var(--surface);

@@ -38,6 +38,8 @@ export const useAgentStore = defineStore('agent', () => {
   const agent = reactive({
     messages: [] as ChatMessage[],
     streaming: { active: false, text: '', reasoning: '', tools: [] as ToolCallView[] } as StreamingState,
+    /** 生成期间排队补充的消息（多条合并换行），本轮结束后自动发送。 */
+    queued: '',
     error: '',
     llm: defaultLlmConfig(),
     llmPath: '',
@@ -94,10 +96,22 @@ export const useAgentStore = defineStore('agent', () => {
     agent.settingsOpen = false;
   }
 
+  /** 发送；生成期间调用则排队（气泡立即显示、灰显标"排队中"），本轮结束后自动续发。 */
   async function send(text: string): Promise<void> {
     const message = text.trim();
-    if (!message || agent.streaming.active) return;
-    agent.messages.push({ role: 'user', content: message });
+    if (!message) return;
+    if (agent.streaming.active) {
+      agent.queued = agent.queued ? `${agent.queued}\n${message}` : message;
+      agent.messages.push({ role: 'user', content: message, queued: true });
+      return;
+    }
+    await startRound(message, false);
+  }
+
+  async function startRound(message: string, alreadyDisplayed: boolean): Promise<void> {
+    if (!alreadyDisplayed) {
+      agent.messages.push({ role: 'user', content: message });
+    }
     agent.error = '';
     agent.streaming = { active: true, text: '', reasoning: '', tools: [] };
     try {
@@ -110,6 +124,14 @@ export const useAgentStore = defineStore('agent', () => {
       agent.streaming.text = '';
       agent.streaming.reasoning = '';
       agent.streaming.tools = [];
+      if (agent.queued) {
+        const next = agent.queued;
+        agent.queued = '';
+        for (const m of agent.messages) {
+          if (m.queued) m.queued = false;
+        }
+        void startRound(next, true);
+      }
     }
   }
 
