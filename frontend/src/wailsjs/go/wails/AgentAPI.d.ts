@@ -9,6 +9,8 @@ export function Clear():Promise<void>;
 
 export function Emit(arg1:agentservice.AgentEvent):Promise<void>;
 
+export function ExportText(arg1:string,arg2:string):Promise<string>;
+
 export function History():Promise<agentservice.HistoryResponse>;
 
 export function Startup(arg1:context.Context):Promise<void>;

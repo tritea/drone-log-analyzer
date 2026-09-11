@@ -2,6 +2,14 @@ import { defineStore } from 'pinia';
 import { computed, reactive } from 'vue';
 import { agentClient, onAgentEvent } from '@/services/agent';
 import type { AgentEvent, ChatMessage, LlmConfig } from '@/services/agent';
+import { useLogStore } from '@/modules/log';
+import {
+  buildMarkdown,
+  buildPrintHtml,
+  exportFileName,
+  printHtml,
+  type ExportMeta,
+} from '../utils/export';
 
 /** 一条工具调用的展示态（进行中/已完成）。 */
 export interface ToolCallView {
@@ -142,6 +150,33 @@ export const useAgentStore = defineStore('agent', () => {
     });
   }
 
+  /** 导出报告所需的会话元信息（来自当前日志与 LLM 配置）。 */
+  function exportMeta(): ExportMeta {
+    const logStore = useLogStore();
+    const sum = logStore.log.summary;
+    const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+    return {
+      filename: sum?.filename ?? '',
+      vehicleType: sum?.vehicleType ?? '',
+      firmwareVersion: sum?.firmwareVersion ?? '',
+      format: str(sum?.format),
+      model: agent.llm.model,
+    };
+  }
+
+  /** 导出 Markdown 文件（保存对话框）。 */
+  async function exportMarkdown(): Promise<void> {
+    const name = exportFileName(exportMeta());
+    const content = buildMarkdown(exportMeta(), agent.messages);
+    const saved = await agentClient.exportText(`${name}.md`, content);
+    if (saved) agent.error = '';
+  }
+
+  /** 导出 PDF：打印对话框里选"另存为 PDF"。 */
+  function exportPdf(): void {
+    printHtml(buildPrintHtml(exportMeta(), agent.messages));
+  }
+
   async function clearSession(): Promise<void> {
     try {
       await agentClient.clear();
@@ -194,5 +229,7 @@ export const useAgentStore = defineStore('agent', () => {
     clearSession,
     loadLlmConfig,
     saveLlmConfig,
+    exportMarkdown,
+    exportPdf,
   };
 });

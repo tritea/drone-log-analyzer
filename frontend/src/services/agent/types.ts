@@ -7,12 +7,21 @@ export interface ToolCallTrace {
   durationMs?: number;
 }
 
+/** 一轮的耗时与 token 用量（usage 由提供商回传，缺失时仅有时长）。 */
+export interface RoundStats {
+  durationMs?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   toolTrace?: ToolCallTrace[];
   /** 展示态：生成期间排队补充的消息，尚未真正发给后端。 */
   queued?: boolean;
+  stats?: RoundStats;
 }
 
 export interface AgentEvent {

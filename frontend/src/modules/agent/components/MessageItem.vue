@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import type { ChatMessage } from '@/services/agent'
 import ToolCallCard from './ToolCallCard.vue'
+import MarkdownView from './MarkdownView.vue'
 
 defineProps<{ message: ChatMessage }>()
+
+function fmtTok(n?: number): string {
+  if (n == null) return '-'
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+}
 </script>
 
 <template>
@@ -11,8 +17,16 @@ defineProps<{ message: ChatMessage }>()
       <ToolCallCard v-for="(t, i) in message.toolTrace" :key="i" :trace="t" />
     </div>
     <div class="msg-bubble" :class="{ 'is-queued': message.queued }">
-      {{ message.content }}
+      <!-- 助手回复渲染 Markdown；用户消息保持纯文本 -->
+      <MarkdownView v-if="message.role === 'assistant'" :source="message.content" />
+      <template v-else>{{ message.content }}</template>
       <span v-if="message.queued" class="queued-tag">排队中</span>
+    </div>
+    <div v-if="message.role === 'assistant' && message.stats" class="msg-stats">
+      <span>⏱ {{ ((message.stats.durationMs ?? 0) / 1000).toFixed(1) }}s</span>
+      <span v-if="message.stats.totalTokens">
+        · ↑{{ fmtTok(message.stats.promptTokens) }} ↓{{ fmtTok(message.stats.completionTokens) }} · Σ{{ fmtTok(message.stats.totalTokens) }}
+      </span>
     </div>
   </div>
 </template>
@@ -38,10 +52,20 @@ defineProps<{ message: ChatMessage }>()
   white-space: pre-wrap;
   word-break: break-word;
 }
+.msg.assistant .msg-bubble {
+  /* Markdown 渲染为块级 HTML，交给 .md-view 控制排版 */
+  white-space: normal;
+}
 .msg.user .msg-bubble {
   background: var(--blue);
   color: #fff;
   border-bottom-right-radius: 4px;
+}
+.msg-stats {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text3);
+  font-variant-numeric: tabular-nums;
 }
 .msg.user .msg-bubble.is-queued {
   background: var(--blue-soft);

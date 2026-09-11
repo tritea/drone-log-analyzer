@@ -85,6 +85,8 @@ onBeforeUnmount(() => {
         <strong>AI 日志分析</strong>
         <span class="agent-head-sub">{{ log.summary?.vehicleType || '' }} {{ log.summary?.format || '' }}</span>
         <div class="agent-head-actions">
+          <AppButton size="xs" icon="download" icon-only title="导出 Markdown 报告" @click="agentStore.exportMarkdown()" />
+          <AppButton size="xs" title="打印 / 另存为 PDF" @click="agentStore.exportPdf()">PDF</AppButton>
           <AppButton size="xs" icon="settings" icon-only title="LLM 设置" @click="agent.settingsOpen = true" />
           <AppButton size="xs" icon="trash" icon-only title="清空会话" @click="agentStore.clearSession()" />
           <AppButton size="xs" icon="close" icon-only title="收起" @click="close" />

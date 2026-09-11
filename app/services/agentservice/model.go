@@ -13,11 +13,21 @@ type ToolCallTrace struct {
 	DurationMs int64          `json:"durationMs"`
 }
 
+// RoundStats 是一轮对话的耗时与 token 用量（usage 由提供商回传，缺失时
+// 仅有时长）。
+type RoundStats struct {
+	DurationMs       int64 `json:"durationMs"`
+	PromptTokens     int   `json:"promptTokens,omitempty"`
+	CompletionTokens int   `json:"completionTokens,omitempty"`
+	TotalTokens      int   `json:"totalTokens,omitempty"`
+}
+
 // ChatMessage 是会话消息（用户/助手）。
 type ChatMessage struct {
 	Role      string          `json:"role"` // user / assistant
 	Content   string          `json:"content"`
 	ToolTrace []ToolCallTrace `json:"toolTrace,omitempty"`
+	Stats     *RoundStats     `json:"stats,omitempty"` // 助手消息：本轮耗时/token
 }
 
 type ChatResponse struct {

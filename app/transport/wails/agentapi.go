@@ -2,6 +2,10 @@ package wails
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"drone-log-analyzer/app/services/agentservice"
 
@@ -44,4 +48,30 @@ func (a *AgentAPI) History() (*agentservice.HistoryResponse, error) {
 
 func (a *AgentAPI) Clear() error {
 	return a.Svc.Clear(context.Background())
+}
+
+// ExportText 把文本内容经保存对话框写盘（导出 Markdown 报告等）。
+// 按默认文件名的扩展名过滤；用户取消返回空串。
+func (a *AgentAPI) ExportText(defaultName, content string) (string, error) {
+	ext := strings.TrimPrefix(filepath.Ext(defaultName), ".")
+	if ext == "" {
+		ext = "md"
+	}
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		Title:           "导出",
+		DefaultFilename: defaultName,
+		Filters: []runtime.FileFilter{
+			{DisplayName: strings.ToUpper(ext) + " 文件 (*." + ext + ")", Pattern: "*." + ext},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if path == "" {
+		return "", nil
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return "", fmt.Errorf("write file: %w", err)
+	}
+	return path, nil
 }

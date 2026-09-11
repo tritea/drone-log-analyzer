@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/compose"
@@ -17,6 +18,17 @@ import (
 	"drone-log-analyzer/app/services/agentservice/tools"
 	"drone-log-analyzer/app/services/logservice"
 )
+
+// roundStats 汇总一轮的耗时与 token 用量（usage 缺失时仅时长）。
+func roundStats(r *run, started time.Time) *agentservice.RoundStats {
+	st := &agentservice.RoundStats{DurationMs: time.Since(started).Milliseconds()}
+	if r.usage != nil {
+		st.PromptTokens = r.usage.PromptTokens
+		st.CompletionTokens = r.usage.CompletionTokens
+		st.TotalTokens = r.usage.TotalTokens
+	}
+	return st
+}
 
 var errEmptyMessage = errors.New("empty message")
 
@@ -29,8 +41,8 @@ type Deps struct {
 }
 
 type service struct {
-	deps Deps
-	sess *session
+	deps     Deps
+	sessions map[string]*session
 
 	mu     sync.Mutex
 	busy   bool
@@ -39,7 +51,25 @@ type service struct {
 
 // New 构造 agentservice.Service。
 func New(deps Deps) agentservice.Service {
-	return &service{deps: deps, sess: newSession()}
+	return &service{deps: deps, sessions: map[string]*session{}}
+}
+
+// sessionFor 返回当前日志对应的会话（按文件名隔离；首次访问时从磁盘
+// 恢复，无日志时用 default 空会话）。
+func (s *service) sessionFor(ctx context.Context) *session {
+	fileName := ""
+	if st, err := s.deps.Log.Status(ctx); err == nil {
+		fileName = st.FileName
+	}
+	key := sessionKey(fileName)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if sess, ok := s.sessions[key]; ok {
+		return sess
+	}
+	sess := loadSession(sessionPath(key))
+	s.sessions[key] = sess
+	return sess
 }
 
 func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agentservice.ChatResponse, error) {
@@ -98,11 +128,13 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 	s.setCancel(cancel)
 	defer cancel()
 
-	input := s.sess.snapshot()
+	sess := s.sessionFor(ctx)
+	input := sess.snapshot()
 	input = append(input, schema.UserMessage(msg))
 	r := newRun(s.deps.Sink)
 
 	iter := ag.Run(runCtx, &adk.AgentInput{Messages: input, EnableStreaming: true})
+	started := time.Now()
 	var runErr error
 	for {
 		ev, ok := iter.Next()
@@ -143,13 +175,26 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 		Role:      "assistant",
 		Content:   answer,
 		ToolTrace: r.trace(),
+		Stats:     roundStats(r, started),
+	}
+	// stats 挂进历史消息（Extra），History() 可带出。
+	for i := len(r.msgs) - 1; i >= 0; i-- {
+		m := r.msgs[i]
+		if m.Role == schema.Assistant && len(m.ToolCalls) == 0 {
+			if m.Extra == nil {
+				m.Extra = map[string]any{}
+			}
+			m.Extra["stats"] = final.Stats
+			break
+		}
 	}
 	// 历史回填：user + 本轮完整交错序列（assistant/tool 保留 ToolCalls 供
-	// 下一轮上下文）。被停止的半轮也保留已生成部分。
+	// 下一轮上下文）。被停止的半轮也保留已生成部分。随后落盘（重开可恢复）。
 	round := make([]*schema.Message, 0, len(r.msgs)+1)
 	round = append(round, schema.UserMessage(msg))
 	round = append(round, r.msgs...)
-	s.sess.extend(round)
+	sess.extend(round)
+	sess.save()
 	s.emitFinal(final)
 	return &agentservice.ChatResponse{Message: final}, nil
 }
@@ -164,11 +209,13 @@ func (s *service) Stop(ctx context.Context) error {
 }
 
 func (s *service) History(ctx context.Context) (*agentservice.HistoryResponse, error) {
-	return &agentservice.HistoryResponse{Messages: s.sess.toDTO()}, nil
+	return &agentservice.HistoryResponse{Messages: s.sessionFor(ctx).toDTO()}, nil
 }
 
 func (s *service) Clear(ctx context.Context) error {
-	s.sess.reset()
+	sess := s.sessionFor(ctx)
+	sess.reset()
+	sess.remove()
 	return nil
 }
 

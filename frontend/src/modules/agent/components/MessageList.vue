@@ -4,6 +4,7 @@ import type { ChatMessage } from '@/services/agent'
 import type { ToolCallView } from '../store/agent-store'
 import MessageItem from './MessageItem.vue'
 import ToolCallCard from './ToolCallCard.vue'
+import MarkdownView from './MarkdownView.vue'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -88,7 +89,9 @@ watch(
         <summary>思考过程</summary>
         <div class="msg-reasoning-body">{{ streamingReasoning }}</div>
       </details>
-      <div v-if="streamingText" class="msg-bubble">{{ streamingText }}</div>
+      <div v-if="streamingText" class="msg-bubble md-streaming">
+        <MarkdownView :source="streamingText" />
+      </div>
       <div v-else class="msg-typing">
         <span class="spinner"></span>思考中 · {{ elapsed }}s
       </div>
@@ -152,6 +155,7 @@ watch(
   white-space: pre-wrap;
   word-break: break-word;
 }
+.md-streaming { white-space: normal; }
 .msg-typing {
   display: flex;
   align-items: center;

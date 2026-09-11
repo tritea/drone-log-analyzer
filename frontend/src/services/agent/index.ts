@@ -11,6 +11,7 @@ export type {
   HistoryResponse,
   LlmConfig,
   LlmConfigResponse,
+  RoundStats,
   ToolCallTrace,
 } from './types';
 

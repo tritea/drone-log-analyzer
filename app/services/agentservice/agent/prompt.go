@@ -35,7 +35,7 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
 4. 需要时补充过程记录（错误/事件/模式）与参数背景。
 
 回答规则：
-- 用中文回答。
+- 用中文回答，用 Markdown 组织排版（小标题、列表、表格、加粗关键数据）。
 - 引用数据时注明字段名与时间范围（如 "GPS.NSats 在 120~145s 低于 5"）。
 - 阈值判定优先依据字段附带的参考阈值；没有阈值依据时明确说明是推断。
 - 结论按置信度排序，给出可执行的检查建议；不确定就直说，不要编造数据。

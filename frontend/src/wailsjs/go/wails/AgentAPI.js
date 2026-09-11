@@ -14,6 +14,10 @@ export function Emit(arg1) {
   return window['go']['wails']['AgentAPI']['Emit'](arg1);
 }
 
+export function ExportText(arg1, arg2) {
+  return window['go']['wails']['AgentAPI']['ExportText'](arg1, arg2);
+}
+
 export function History() {
   return window['go']['wails']['AgentAPI']['History']();
 }

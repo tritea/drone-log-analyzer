@@ -1,5 +1,23 @@
 export namespace agentservice {
 	
+	export class RoundStats {
+	    durationMs: number;
+	    promptTokens?: number;
+	    completionTokens?: number;
+	    totalTokens?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RoundStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.durationMs = source["durationMs"];
+	        this.promptTokens = source["promptTokens"];
+	        this.completionTokens = source["completionTokens"];
+	        this.totalTokens = source["totalTokens"];
+	    }
+	}
 	export class ToolCallTrace {
 	    tool: string;
 	    args?: Record<string, any>;
@@ -22,6 +40,7 @@ export namespace agentservice {
 	    role: string;
 	    content: string;
 	    toolTrace?: ToolCallTrace[];
+	    stats?: RoundStats;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatMessage(source);
@@ -32,6 +51,7 @@ export namespace agentservice {
 	        this.role = source["role"];
 	        this.content = source["content"];
 	        this.toolTrace = this.convertValues(source["toolTrace"], ToolCallTrace);
+	        this.stats = this.convertValues(source["stats"], RoundStats);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -169,6 +189,7 @@ export namespace agentservice {
 		    return a;
 		}
 	}
+	
 
 }
 

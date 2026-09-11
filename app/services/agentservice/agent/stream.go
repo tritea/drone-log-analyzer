@@ -18,6 +18,9 @@ type run struct {
 
 	msgs []*schema.Message // 本轮收集的 user/assistant/tool 交错序列
 
+	// usage 是模型最近一次上报的 token 用量（流式通常在最后一个 chunk）。
+	usage *schema.TokenUsage
+
 	// pending 记录每个 ToolCallID 的开始时刻，工具结果到达时计算耗时。
 	pending map[string]time.Time
 }
@@ -65,6 +68,9 @@ func (r *run) assistant(msg *schema.Message) {
 		})
 	}
 	r.msgs = append(r.msgs, msg)
+	if msg.ResponseMeta != nil && msg.ResponseMeta.Usage != nil {
+		r.usage = msg.ResponseMeta.Usage
+	}
 	if len(msg.ToolCalls) == 0 {
 		if msg.ReasoningContent != "" {
 			r.emit(agentservice.AgentEvent{Type: "reasoning", Text: msg.ReasoningContent})
@@ -110,6 +116,9 @@ func (r *run) consumeStream(sr *schema.StreamReader[*schema.Message]) error {
 		}
 		if f.Content != "" {
 			r.emit(agentservice.AgentEvent{Type: "delta", Text: f.Content})
+		}
+		if f.ResponseMeta != nil && f.ResponseMeta.Usage != nil {
+			r.usage = f.ResponseMeta.Usage
 		}
 		frames = append(frames, f)
 	}

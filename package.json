@@ -23,8 +23,10 @@
     "vue-tsc": "^2.2.12"
   },
   "dependencies": {
+    "dompurify": "^3.4.15",
     "leaflet": "^1.9.4",
     "maplibre-gl": "^5.24.0",
+    "marked": "^18.0.12",
     "pinia": "^3.0.4",
     "three": "^0.160.1",
     "three-spritetext": "^1.10.0",

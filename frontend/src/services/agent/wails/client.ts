@@ -31,4 +31,6 @@ export const wailsAgentClient: AgentClient = {
     toPlain(await configAPI.GetLlmConfig()),
   saveLlmConfig: async (config: LlmConfig): Promise<LlmConfigResponse> =>
     toPlain(await configAPI.SaveLlmConfig(config)),
+  exportText: (defaultName: string, content: string): Promise<string> =>
+    agentAPI.ExportText(defaultName, content),
 };
