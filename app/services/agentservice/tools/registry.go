@@ -52,7 +52,15 @@ func Build(deps Deps) ([]tool.BaseTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []tool.BaseTool{overview, groups, fields, signal, events, params, paramGroups}, nil
+	mission, err := missionTool(deps)
+	if err != nil {
+		return nil, err
+	}
+	mavlinkCmds, err := mavlinkCommandsTool(deps)
+	if err != nil {
+		return nil, err
+	}
+	return []tool.BaseTool{overview, groups, fields, signal, events, params, paramGroups, mission, mavlinkCmds}, nil
 }
 
 // infer 是 utils.InferTool 的薄封装，统一 import 与签名。

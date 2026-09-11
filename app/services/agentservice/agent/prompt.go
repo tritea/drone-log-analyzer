@@ -37,7 +37,9 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
 1. 先了解整体概况（含错误/事件计数）。
 2. 再列出数据分组并查看字段的含义、单位与参考阈值。
 3. 需要数据时按 "分组.字段" 查询时间窗统计（如 GPS.NSats），时间单位秒、相对日志起点。
-4. 需要时补充过程记录（错误/事件/模式）与参数背景。
+4. 排查航线与指令：任务航线/航点（get_mission，飞行中重新上传会产生多版本，版本切换时刻是重点）、
+   飞行中收到的 MAVLink 命令（get_mavlink_commands，判断是否地面站突然下发降落/返航/改目标等）。
+5. 需要时补充过程记录（错误/事件/模式）与参数背景。
 
 回答规则：
 - 用中文回答，用 Markdown 组织排版（小标题、列表、表格、加粗关键数据）。
