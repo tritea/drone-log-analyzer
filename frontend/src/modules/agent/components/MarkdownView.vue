@@ -55,16 +55,21 @@ const html = computed<string>(() => {
   overflow-x: auto;
 }
 .md-view :deep(pre code) { background: none; padding: 0; }
+/* 表格随容器宽度自适应：fixed 布局按可用宽度分配列，避免列宽被最宽内容
+   撑死后面板缩小也不回收；放不下的长词在单元格内换行。 */
 .md-view :deep(table) {
   border-collapse: collapse;
   margin: 0.45em 0;
   font-size: 0.95em;
+  width: 100%;
+  table-layout: fixed;
 }
 .md-view :deep(th),
 .md-view :deep(td) {
   border: 1px solid var(--border);
   padding: 3px 8px;
   text-align: left;
+  overflow-wrap: anywhere;
 }
 .md-view :deep(th) { background: var(--surface-strong); }
 .md-view :deep(blockquote) {
