@@ -296,9 +296,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
       }
     }
 
-    // AI 问题时段：按严重度铺半透明警示带（纯色带，不带常驻文字——标题/结论
-    // 走底部「AI:」标签的 hover tooltip 与消息卡片）；z 略靠前于模式色带，
-    // 避免共面 z-fighting 闪烁
+    // AI 问题时段：按严重度铺半透明警示带 + 第二行标题文字（第一行是飞行模式名，错开 22px）；
+    // z 略靠前于模式色带，避免共面 z-fighting 闪烁
     const incidents = useAgentStore().incidents;
     if (incidents.length) {
       const base = incidentAnchorMs();
@@ -310,6 +309,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
             startT: Math.max(s, xRange.min),
             endT: Math.min(e, xRange.max),
             color: SEVERITY_META[inc.severity].band,
+            label: '⚠ ' + inc.title,
+            labelTop: 22,
             z: AI_BAND_Z,
           });
         }
@@ -606,8 +607,6 @@ export const useAnalysisStore = defineStore('analysis', () => {
   /** 增量并入曲线：已存在的更新变换/颜色，缺失的按二进制构建后追加。 */
   async function addCurveSelection(seeds: CurveSeed[], fieldName: string): Promise<void> {
     if (!seeds.length) return;
-    // 用户主动操作图表：退出 AI 聚焦语境，清临时叠加曲线
-    useAgentStore().cancelIncidentFocus();
 
     // 已在图中的曲线：key → 在 activeCurves 中的下标
     const indexByKey = new Map<string, number>();
@@ -666,7 +665,6 @@ export const useAnalysisStore = defineStore('analysis', () => {
   /** 全量替换曲线：清空后按种子重建（用于恢复已保存状态）。 */
   async function loadCurveSelection(seeds: CurveSeed[], fieldName: string): Promise<void> {
     if (!seeds.length) return;
-    useAgentStore().cancelIncidentFocus();
     curveDrawn.value = {};
 
     const restored: Curve[] = [];
@@ -734,7 +732,6 @@ export const useAnalysisStore = defineStore('analysis', () => {
   }
 
   async function addCurve(type: string, field: string): Promise<void> {
-    useAgentStore().cancelIncidentFocus();
     const logStore = useLogStore();
     logStore.log.loading = true;
     try {
@@ -790,7 +787,6 @@ export const useAnalysisStore = defineStore('analysis', () => {
   }
 
   function removeCurve(idx: number): void {
-    useAgentStore().cancelIncidentFocus();
     const removed = chart.value.activeCurves[idx];
     chart.value.activeCurves.splice(idx, 1);
     if (removed) {
@@ -813,7 +809,6 @@ export const useAnalysisStore = defineStore('analysis', () => {
   }
 
   function clearAll(): void {
-    useAgentStore().cancelIncidentFocus();
     chart.value.activeCurves = [];
     curveDrawn.value = {};
     chart.value.activeField.name = '';

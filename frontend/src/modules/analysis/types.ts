@@ -20,6 +20,8 @@ export type MarkArea = {
   endT: number;
   color: string;
   label?: string;
+  /** label 距绘图区顶部的偏移（px，缺省 6）；第二行标注（如 AI 问题标题）用更大值错开。 */
+  labelTop?: number;
   /** 色带 z 深度（缺省 DEPTH_BAND）；AI 警示带与模式色带共面会 z-fighting，用不同 z 错开。 */
   z?: number;
 };

@@ -95,12 +95,6 @@ export const useAgentStore = defineStore('agent', () => {
     return useAnalysisStore().incidentAnchorMs() + sec * 1000;
   }
 
-  /** 取消聚焦：清聚焦态与 AI 临时曲线（用户主动增删曲线等离开聚焦语境时由 analysis 调用）。 */
-  function cancelIncidentFocus(): void {
-    focusedIncidentId.value = '';
-    useAnalysisStore().clearAiOverlay();
-  }
-
   /**
    * 定位问题时段（消息卡片/图表标记点击）：把该时段涉及的字段加载为**临时叠加
    * 曲线**（与用户曲线分开、不持久化，整体替换上一次叠加），3D 播放跳到时段
@@ -298,7 +292,6 @@ export const useAgentStore = defineStore('agent', () => {
     incidents,
     focusedIncidentId,
     focusIncident,
-    cancelIncidentFocus,
     initialize,
     dispose,
     refreshHistory,
