@@ -1075,6 +1075,7 @@ export namespace logservice {
 	    typeCount: number;
 	    startUnixSecs: number;
 	    hasUTC: boolean;
+	    startTimeMs: number;
 	    format: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1097,6 +1098,7 @@ export namespace logservice {
 	        this.typeCount = source["typeCount"];
 	        this.startUnixSecs = source["startUnixSecs"];
 	        this.hasUTC = source["hasUTC"];
+	        this.startTimeMs = source["startTimeMs"];
 	        this.format = source["format"];
 	    }
 	}

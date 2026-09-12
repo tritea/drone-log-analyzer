@@ -568,7 +568,7 @@ export class LineChart {
         labelEl = document.createElement('div');
         labelEl.textContent = area.label;
         labelEl.className = 'gpu-mode-label';
-        labelEl.style.cssText = `position:absolute;color:#374151;font:700 12px -apple-system,"Microsoft YaHei",sans-serif;pointer-events:none;transform:translateX(-50%);top:${this.plot.top + (area.labelTop ?? 6)}px;white-space:nowrap;letter-spacing:0.3px;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 1px 2px rgba(0,0,0,0.25);`;
+        labelEl.style.cssText = `position:absolute;color:#374151;font:700 12px -apple-system,"Microsoft YaHei",sans-serif;pointer-events:none;transform:translateX(-50%);top:${this.plot.top + 6}px;white-space:nowrap;letter-spacing:0.3px;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 1px 2px rgba(0,0,0,0.25);`;
         this.overlay.appendChild(labelEl);
       }
       this.bands.push({
