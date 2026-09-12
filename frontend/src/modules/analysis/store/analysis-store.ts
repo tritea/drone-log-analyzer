@@ -69,6 +69,8 @@ interface GroupParamSource {
 const SAVE_DEBOUNCE_MS = 350;
 const TOOLTIP_MSG_CAP = 200;
 const MARK_LINE_CAP = 150;
+/** AI 警示带 z 深度：略靠前于模式色带（-2），避免共面 z-fighting。 */
+const AI_BAND_Z = -1.9;
 const ESCAPE_MAP: Array<[RegExp, string]> = [[/&/g, '&amp;'], [/</g, '&lt;'], [/>/g, '&gt;']];
 const escapeHtml = (s: unknown): string => ESCAPE_MAP.reduce((acc, [re, rep]) => acc.replace(re, rep), String(s));
 
@@ -155,18 +157,24 @@ export const useAnalysisStore = defineStore('analysis', () => {
     return own * group.scale + group.offset;
   }
 
-  /** 渲染用的合并曲线集：用户曲线 + AI 临时叠加（仅渲染层合并，不改 activeCurves）。 */
+  /** 渲染/hover 用的合并曲线集：用户曲线 + AI 临时叠加（同 id 剔重）。
+   * 注意：主图绘制/量程/视口只用 activeCurves——AI 叠加走独立绘制通道
+   *（buildAiSeries），不进任何用户曲线管线。 */
   function renderedCurves(): Curve[] {
-    return aiOverlay.value.length ? [...chart.value.activeCurves, ...aiOverlay.value] : chart.value.activeCurves;
+    if (!aiOverlay.value.length) return chart.value.activeCurves;
+    const ids = new Set(chart.value.activeCurves.map((c) => c.id));
+    const extra = aiOverlay.value.filter((c) => !ids.has(c.id));
+    return extra.length ? [...chart.value.activeCurves, ...extra] : chart.value.activeCurves;
   }
 
   function calcYRange(): ValueRange {
     let gMin = Infinity;
     let gMax = -Infinity;
-    for (const c of renderedCurves()) {
+    for (const c of chart.value.activeCurves) {
       if (!c.visible || !c.count) continue;
       let lo = transformValue(c.min, c);
       let hi = transformValue(c.max, c);
+      if (!Number.isFinite(lo) || !Number.isFinite(hi)) continue; // NaN/Inf 元数据防护：跳过该曲线
       if (lo > hi) { const tmp = lo; lo = hi; hi = tmp; }
       if (lo < gMin) gMin = lo;
       if (hi > gMax) gMax = hi;
@@ -180,10 +188,11 @@ export const useAnalysisStore = defineStore('analysis', () => {
   function calcXRange(): ValueRange {
     let gMin = Infinity;
     let gMax = -Infinity;
-    for (const c of renderedCurves()) {
+    for (const c of chart.value.activeCurves) {
       if (!c.visible || !c.buffer || !c.buffer.length || c.baseTimeMs === undefined) continue;
       let first = c.baseTimeMs + c.buffer[0];
       let last = c.baseTimeMs + c.buffer[c.buffer.length - 2];
+      if (!Number.isFinite(first) || !Number.isFinite(last)) continue;
       if (first > last) { const tmp = first; first = last; last = tmp; }
       if (first < gMin) gMin = first;
       if (last > gMax) gMax = last;
@@ -218,7 +227,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
   // ═══════════════════════ 4. 系列与标注 ═══════════════════════
   function buildLineSeries(baseTimeMs: number): LineSeries[] {
     const out: LineSeries[] = [];
-    for (const c of renderedCurves()) {
+    for (const c of chart.value.activeCurves) {
       if (!c.visible || !c.buffer || !c.buffer.length) continue;
       const group = ensureFieldGroupParams(c.fieldName);
       const scaleY = c.scale * group.scale;
@@ -269,7 +278,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
       }
     }
 
-    // AI 问题时段：按严重度铺半透明警示带 + 第二行标题文字（第一行是飞行模式名，错开 22px）
+    // AI 问题时段：按严重度铺半透明警示带 + 第二行标题文字（第一行是飞行模式名，错开 22px）；
+    // z 略靠前于模式色带，避免共面 z-fighting 闪烁
     const incidents = useAgentStore().incidents;
     if (incidents.length) {
       const base = incidentAnchorMs();
@@ -283,6 +293,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
             color: SEVERITY_META[inc.severity].band,
             label: '⚠ ' + inc.title,
             labelTop: 22,
+            z: AI_BAND_Z,
           });
         }
       }
@@ -448,6 +459,35 @@ export const useAnalysisStore = defineStore('analysis', () => {
     if (threeStore.three.playback.curveAxis && useUiStore().ui.mainView === 'three') threeStore.rebuildThreeCurveChart();
   }
 
+  /**
+   * AI 临时叠加 → 独立绘制系列：归一化映射到主图 Y 范围的**上半区**
+   *（形状保真、不扰动用户曲线量程/视口），与用户曲线不同 id（ai- 前缀），
+   * 走 LineChart 的独立叠加通道 setAiSeries。
+   */
+  function buildAiSeries(baseTimeMs: number): LineSeries[] {
+    if (!aiOverlay.value.length) return [];
+    const ids = new Set(chart.value.activeCurves.map((c) => c.id));
+    const yRange = calcYRange();
+    const span = yRange.max - yRange.min || 1;
+    const out: LineSeries[] = [];
+    for (const c of aiOverlay.value) {
+      if (ids.has(c.id) || !c.buffer || !c.buffer.length) continue; // 用户已有同字段：不重复叠
+      const cSpan = c.max - c.min;
+      const scale = cSpan > 0 ? (span * 0.45) / cSpan : 1; // 占上半 ~45% 区带
+      const offsetY = yRange.min + span * 0.5 - c.min * scale; // 区带底 ≈ 半高
+      out.push({
+        id: 'ai-' + c.id,
+        color: c.color,
+        buffer: c.buffer,
+        count: c.count,
+        scaleY: scale,
+        offsetY,
+        xOffset: (c.baseTimeMs !== undefined ? c.baseTimeMs : baseTimeMs) - baseTimeMs,
+      });
+    }
+    return out;
+  }
+
   function applyChartOptions(): void {
     const baseTimeMs = chartBaseTimeMs();
     const xRange = calcXRange();
@@ -459,6 +499,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
       markAreas: buildMarkAreas(xRange),
       markLines: buildMarkLines(xRange),
     });
+    runtime.mainChart.setAiSeries(buildAiSeries(baseTimeMs));
     runtime.mainChart.resize();
     syncThreeCurveChart();
   }
@@ -497,6 +538,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     if (!runtime.mainChart) return;
     runtime.mainChart.setSeries(buildLineSeries(chartBaseTimeMs()));
     runtime.mainChart.refitYRange(calcYRange());
+    runtime.mainChart.setAiSeries(buildAiSeries(chartBaseTimeMs()));
     syncThreeCurveChart();
   }
 

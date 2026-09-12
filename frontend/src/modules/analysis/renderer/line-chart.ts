@@ -134,6 +134,8 @@ export class LineChart {
   private plotDev = { x: 0, y: 0, w: 0, h: 0 };
 
   private plots: SeriesMesh[] = [];
+  /** AI 临时叠加曲线（独立通道：不参与视口/量程/图例，全量重建，数量有界）。 */
+  private aiPlots: SeriesMesh[] = [];
   private gridLayer: GridLayer | null = null;
   private crosshairV: GuideLine | null = null;
   private crosshairH: GuideLine | null = null;
@@ -377,6 +379,28 @@ export class LineChart {
   }
 
   /**
+   * AI 临时叠加曲线：与主曲线集完全独立的绘制通道——不参与视口/量程计算、
+   * 不与主曲线按 id diff（store 侧已归一化映射并加 ai- 前缀 id）。数量有界
+   *（≤几个字段），直接全量重建，开销可忽略。
+   */
+  setAiSeries(series: LineSeries[]): void {
+    for (const entry of this.aiPlots) {
+      this.scene.remove(entry.mesh);
+      entry.geometry.dispose();
+      entry.material.dispose();
+    }
+    this.aiPlots = [];
+    for (const s of series) {
+      if (!s.count) continue;
+      const entry = this.createSeriesMesh(s);
+      entry.mesh.renderOrder = RENDER_ORDER_PLOT + 1; // 叠在主曲线之上
+      this.scene.add(entry.mesh);
+      this.aiPlots.push(entry);
+    }
+    this.schedulePaint();
+  }
+
+  /**
    * 重算 Y 量程并刷新，**保留当前 X 缩放窗口**。
    * 用于曲线缩放 / 偏移变更（Y 范围变化、时间窗口不变）：只更新 Y 上下界
    * （初始与当前视口同步重置到新量程），X 维持用户当前缩放，不清空缩放历史。
@@ -535,7 +559,7 @@ export class LineChart {
       });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.renderOrder = RENDER_ORDER_BG;
-      mesh.position.set((startD + endD) / 2, bandY, DEPTH_BAND);
+      mesh.position.set((startD + endD) / 2, bandY, area.z ?? DEPTH_BAND);
       mesh.scale.set(w, bandH, 1);
       this.bgGroup.add(mesh);
 
@@ -841,6 +865,7 @@ export class LineChart {
     const resW = this.plotDev.w || 1;
     const resH = this.plotDev.h || 1;
     for (const entry of this.plots) entry.material.resolution.set(resW, resH);
+    for (const entry of this.aiPlots) entry.material.resolution.set(resW, resH);
     this.drawGrid();
     this.placeOverlays();
     this.realignCrosshair();
@@ -1162,6 +1187,11 @@ export class LineChart {
     window.removeEventListener('pointerup', this.onBoxUp);
 
     for (const entry of this.plots) {
+      this.scene.remove(entry.mesh);
+      entry.geometry.dispose();
+      entry.material.dispose();
+    }
+    for (const entry of this.aiPlots) {
       this.scene.remove(entry.mesh);
       entry.geometry.dispose();
       entry.material.dispose();
