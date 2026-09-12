@@ -213,14 +213,21 @@ export const useAnalysisStore = defineStore('analysis', () => {
   }
 
   /**
-   * AI 问题时段相对秒 → 绝对 ms 的锚点：优先日志 UTC 起点（summary.startUnixSecs，
-   * 与后端工具 timeSec 同基准，不受图中曲线组合影响）；无 UTC 基准退化用曲线基准。
-   * 各曲线 baseTimeMs 是各自 type 首行时间（随曲线组合漂移），不能做 incident 锚点——
-   * 否则事件可能被锚到数据范围外，点击"没反应"。
+   * AI 问题时段相对秒 → 曲线轴绝对 ms 的锚点。
+   * 后端工具输出的秒 = (TypeBody.BaseTimeMs - 日志最早原点)/1000，即 0 点是
+   * "日志内最早 type 的 BaseTimeMs"（启动毫秒或 UTC 回基，与曲线轴同一量纲；
+   * 注意不是 summary.startUnixSecs 的 UTC epoch——量纲不同会全部错位）。
+   * 前端用已拉取 type body 原点的最小值近似（误差 = 最早 type 未被拉过的差，
+   * 通常亚秒级），没有任何 body 时退化用曲线基准。
    */
   function incidentAnchorMs(): number {
-    const sum = useLogStore().log.summary;
-    if (sum && sum.hasUTC && sum.startUnixSecs > 0) return sum.startUnixSecs * 1000;
+    const cm = useCurveManagerStore();
+    let min = Infinity;
+    for (const name in cm.typeBodies) {
+      const b = cm.typeBodies[name];
+      if (b && Number.isFinite(b.baseTimeMs) && b.baseTimeMs < min) min = b.baseTimeMs;
+    }
+    if (min !== Infinity) return min;
     return chartBaseTimeMs();
   }
 
