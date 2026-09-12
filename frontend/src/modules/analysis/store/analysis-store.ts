@@ -86,6 +86,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     showErrors: true,
     showEvents: true,
     showMessages: false,
+    showAiMarks: true,
     lineWidth: 3,
     activeField: { name: '', selectedSimpleName: '', expanded: {}, groupParams: {} },
   });
@@ -192,6 +193,18 @@ export const useAnalysisStore = defineStore('analysis', () => {
     return base && base.baseTimeMs !== undefined ? base.baseTimeMs : 0;
   }
 
+  /**
+   * AI 问题时段相对秒 → 绝对 ms 的锚点：优先日志 UTC 起点（summary.startUnixSecs，
+   * 与后端工具 timeSec 同基准，不受图中曲线组合影响）；无 UTC 基准退化用曲线基准。
+   * 各曲线 baseTimeMs 是各自 type 首行时间（随曲线组合漂移），不能做 incident 锚点——
+   * 否则事件可能被锚到数据范围外，点击"没反应"。
+   */
+  function incidentAnchorMs(): number {
+    const sum = useLogStore().log.summary;
+    if (sum && sum.hasUTC && sum.startUnixSecs > 0) return sum.startUnixSecs * 1000;
+    return chartBaseTimeMs();
+  }
+
   // ═══════════════════════ 4. 系列与标注 ═══════════════════════
   function buildLineSeries(baseTimeMs: number): LineSeries[] {
     const out: LineSeries[] = [];
@@ -248,8 +261,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
 
     // AI 问题时段：按严重度铺半透明警示带 + 第二行标题文字（第一行是飞行模式名，错开 22px）
     const incidents = useAgentStore().incidents;
-    if (incidents.length) {
-      const base = chartBaseTimeMs();
+    if (chart.value.showAiMarks && incidents.length) {
+      const base = incidentAnchorMs();
       for (const inc of incidents) {
         const s = base + inc.startSec * 1000;
         const e = base + inc.endSec * 1000;
@@ -315,8 +328,9 @@ export const useAnalysisStore = defineStore('analysis', () => {
     const incidents = useAgentStore().incidents;
     let aiCount = 0;
     for (const inc of incidents) {
+      if (!chart.value.showAiMarks) break;
       if (aiCount >= MARK_LINE_CAP) break;
-      const t = chartBaseTimeMs() + inc.startSec * 1000;
+      const t = incidentAnchorMs() + inc.startSec * 1000;
       if (t < xmin || t > xmax) continue;
       const meta = SEVERITY_META[inc.severity];
       out.push({
@@ -931,9 +945,10 @@ export const useAnalysisStore = defineStore('analysis', () => {
     if (runtime.mainChart) runtime.mainChart.resetZoom();
   }
 
-  /** 聚焦绝对时间窗（如 AI 问题时段）：主图 X 缩放到该窗口，带边距、可撤销。 */
-  function focusChartWindow(t0: number, t1: number): void {
-    if (runtime.mainChart && t1 > t0) runtime.mainChart.focusXWindow({ min: t0, max: t1 });
+  /** 聚焦绝对时间窗（如 AI 问题时段）：主图 X 缩放到该窗口，带边距、可撤销。返回是否成功（窗口与数据无交集则 false）。 */
+  function focusChartWindow(t0: number, t1: number): boolean {
+    if (!runtime.mainChart || !(t1 > t0)) return false;
+    return runtime.mainChart.focusXWindow({ min: t0, max: t1 });
   }
 
   // ═══════════════════════ 12. 派生值与格式化 ═══════════════════════
@@ -1018,6 +1033,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     formatPointValue,
     rebuildChart,
     chartBaseTimeMs,
+    incidentAnchorMs,
     buildLineSeries,
     buildMarkAreas,
     buildMarkLines,

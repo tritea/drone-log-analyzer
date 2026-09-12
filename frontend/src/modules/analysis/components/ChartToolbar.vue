@@ -70,6 +70,7 @@ const chartToggles = computed<ToggleDef[]>(() => [
   { key: 'err', label: '错误', labelClass: 'event-tag event-tag-err', title: '在时间轴上标出错误记录', checked: () => chart.value.showErrors, change: () => { chart.value.showErrors = !chart.value.showErrors; onEventMarkToggle() } },
   { key: 'ev', label: '事件', labelClass: 'event-tag event-tag-ev', title: '在时间轴上标出飞行事件', checked: () => chart.value.showEvents, change: () => { chart.value.showEvents = !chart.value.showEvents; onEventMarkToggle() } },
   { key: 'msg', label: '消息', labelClass: 'event-tag event-tag-msg', title: '在时间轴上标出文本消息', checked: () => chart.value.showMessages, change: () => { chart.value.showMessages = !chart.value.showMessages; onEventMarkToggle() } },
+  { key: 'ai', label: 'AI标记', labelClass: 'event-tag event-tag-ai', title: '在时间轴上标出 AI 分析的问题时段', checked: () => chart.value.showAiMarks, change: () => { chart.value.showAiMarks = !chart.value.showAiMarks; onEventMarkToggle() } },
 ])
 
 const threeToggles = computed<ToggleDef[]>(() => [

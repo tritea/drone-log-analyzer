@@ -20,9 +20,9 @@ const incidents = computed(() =>
   props.message.role === 'assistant' ? parseIncidents(props.message.content) : [],
 )
 
-/** 相对秒 → 时刻标签（锚定日志起点；无曲线基准时退化为相对时长显示）。 */
+/** 相对秒 → 时刻标签（统一 incident 锚点；无 UTC 基准时退化为相对时长显示）。 */
 const timeLabel = (sec: number): string =>
-  formatTime(useAnalysisStore().chartBaseTimeMs() + sec * 1000)
+  formatTime(useAnalysisStore().incidentAnchorMs() + sec * 1000)
 
 function fmtTok(n?: number): string {
   if (n == null) return '-'

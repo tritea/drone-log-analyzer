@@ -781,17 +781,19 @@ export class LineChart {
   /**
    * 聚焦一个绝对时间窗（如 AI 问题时段）：X 缩放到该窗口（带 15% 边距，
    * 钳制在数据范围内），Y 保持当前量程；入历史栈可撤销。
+   * 返回是否生效——窗口与数据范围完全无交集时不动作、返回 false。
    */
-  focusXWindow(x: ValueRange): void {
+  focusXWindow(x: ValueRange): boolean {
     const iv = this.initialViewport;
     const span = Math.max(x.max - x.min, 1);
     const pad = span * 0.15;
     const xMin = Math.max(x.min - pad - this.baseTimeMs, iv.xMin);
     const xMax = Math.min(x.max + pad - this.baseTimeMs, iv.xMax);
-    if (!(xMax > xMin)) return;
+    if (!(xMax > xMin)) return false;
     this.pushHistory();
     this.viewport = { ...this.viewport, xMin, xMax };
     this.applyViewport(true);
+    return true;
   }
 
   // ---- 渲染循环 ----

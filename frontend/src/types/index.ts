@@ -434,6 +434,9 @@ export interface LogSummary {
   durationSecs?: number;
   frame?: string | number;
   airframe?: string;
+  /** 日志 UTC 基准（有则相对秒可换算绝对时刻；与 AI 工具 timeSec 同基准）。 */
+  hasUTC?: boolean;
+  startUnixSecs?: number;
   [key: string]: unknown;
 }
 
@@ -465,6 +468,8 @@ export interface ChartState {
   showErrors: boolean;
   showEvents: boolean;
   showMessages: boolean;
+  /** AI 问题时段标记（主图警示带/标签、3D 时间轴警示条）总开关。 */
+  showAiMarks: boolean;
   lineWidth: number;
   activeField: ActiveFieldState;
 }

@@ -4,6 +4,7 @@ import { agentClient, onAgentEvent } from '@/services/agent';
 import type { AgentEvent, ChatMessage, LlmConfig } from '@/services/agent';
 import { useLogStore } from '@/modules/log';
 import { useAnalysisStore } from '@/modules/analysis';
+import { showToast } from '@/modules/shared/ui-store';
 import { useScene3dStore } from '@/modules/scene-3d';
 import type { Incident } from '../utils/incidents';
 import { parseIncidents } from '../utils/incidents';
@@ -80,16 +81,15 @@ export const useAgentStore = defineStore('agent', () => {
     useAnalysisStore().rebuildChart();
   });
 
-  /** 问题时段相对秒 → 绝对 ms（锚定曲线日志起点，与主图/回放同一时间轴）。 */
+  /** 问题时段相对秒 → 绝对 ms（统一走 analysis 的 incident 锚点，与主图标记同一基准）。 */
   function incidentAbsMs(sec: number): number {
-    return useAnalysisStore().chartBaseTimeMs() + sec * 1000;
+    return useAnalysisStore().incidentAnchorMs() + sec * 1000;
   }
 
   /**
    * 定位问题时段（消息卡片/图表标记点击）：先自动加载该时段涉及的字段曲线
    *（未在图中的按需拉取），再 3D 播放跳到时段起点、主图缩放到该窗口。
-   * 曲线加载放在最前——若此前图上没有曲线，日志起点（时间锚点）要等曲线
-   * 加载后才可用，锚定/缩放必须在加载之后计算。
+   * 窗口与当前曲线数据无交集时 toast 说明（不再"点了没反应"）。
    */
   async function focusIncident(inc: Incident): Promise<void> {
     if (!inc) return;
@@ -98,7 +98,10 @@ export const useAgentStore = defineStore('agent', () => {
       await analysis.loadIncidentFields(inc.fields);
     }
     useScene3dStore().seekThreeToTime(incidentAbsMs(inc.startSec));
-    analysis.focusChartWindow(incidentAbsMs(inc.startSec), incidentAbsMs(inc.endSec));
+    const focused = analysis.focusChartWindow(incidentAbsMs(inc.startSec), incidentAbsMs(inc.endSec));
+    if (!focused) {
+      showToast(`「${inc.title}」(${inc.startSec}s~${inc.endSec}s) 超出当前曲线的时间范围`, 'info');
+    }
   }
 
   let unsubEvents: (() => void) | null = null;

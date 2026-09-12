@@ -170,7 +170,8 @@ export async function buildIncidentChartsHtml(incidents: Incident[]): Promise<st
   if (!list.length) return '';
 
   const cm = useCurveManagerStore();
-  const baseMs = useAnalysisStore().chartBaseTimeMs();
+  const analysis = useAnalysisStore();
+  const baseMs = analysis.incidentAnchorMs();
   const sections: string[] = [];
 
   for (const inc of list) {
