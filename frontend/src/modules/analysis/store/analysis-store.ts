@@ -93,6 +93,9 @@ export const useAnalysisStore = defineStore('analysis', () => {
   const curveState = ref<CurveSaveState>({ loading: false, restoring: false, saveTimer: null });
   /** 运行时绘制开关（不持久化）：curveId → 是否绘制；缺省视为 true。 */
   const curveDrawn = ref<Record<string, boolean>>({});
+  /** AI 定位问题时段时自动加载的曲线（id + 字段名，会话级不持久化）：
+   * 供「AI曲线」一键开关批量移除/恢复，避免赖在图上关不掉。 */
+  const aiCurves = ref<Array<{ id: string; name: string }>>([]);
 
   // ═══════════════════════ 2. 字段组参数（纯数据读写）═══════════════════════
   function makeFieldGroupParams(source?: GroupParamSource): FieldGroupParams {
@@ -699,6 +702,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
           chart.value.activeCurves.push(buildCurve(type, field, binary));
           loaded.push(name);
           added = true;
+          const id = curveKey(type, field);
+          if (!aiCurves.value.some((c) => c.id === id)) aiCurves.value.push({ id, name });
         } catch {
           // 字段不存在（名字写错/该格式无此字段）：跳过
         }
@@ -733,6 +738,34 @@ export const useAnalysisStore = defineStore('analysis', () => {
   function removeCurveById(id: string): void {
     const idx = chart.value.activeCurves.findIndex((c) => c.id === id);
     if (idx >= 0) removeCurve(idx);
+  }
+
+  /** AI 加载的曲线是否还在图上（「AI曲线」开关的勾选态）。 */
+  const aiCurvesActive = computed<boolean>(() =>
+    aiCurves.value.some((c) => chart.value.activeCurves.some((a) => a.id === c.id)),
+  );
+
+  /**
+   * 「AI曲线」一键开关：图上有 AI 自动加载的曲线 → 全部移除（还原图表）；
+   * 已移除 → 按记录的字段名重新加载。用户手动删过的条目静默跳过。
+   */
+  async function toggleAiCurves(): Promise<void> {
+    if (aiCurvesActive.value) {
+      for (const c of aiCurves.value) removeCurveById(c.id);
+      const removed = aiCurves.value.length;
+      showToast(`已移除 ${removed} 条 AI 定位加载的曲线`, 'success');
+      return;
+    }
+    const names = aiCurves.value.map((c) => c.name);
+    if (!names.length) {
+      showToast('还没有 AI 加载的曲线（点击问题时段卡片后自动加载）', 'info');
+      return;
+    }
+    const loaded = await loadIncidentFields(names);
+    showToast(
+      loaded.length ? `已恢复 ${loaded.length} 条 AI 曲线` : 'AI 曲线字段已不可用',
+      loaded.length ? 'success' : 'info',
+    );
   }
 
   function clearAll(): void {
@@ -1060,6 +1093,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
     toggleField,
     addCurve,
     loadIncidentFields,
+    aiCurvesActive,
+    toggleAiCurves,
     removeCurve,
     removeCurveById,
     clearAll,

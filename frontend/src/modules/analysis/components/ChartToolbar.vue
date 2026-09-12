@@ -71,6 +71,7 @@ const chartToggles = computed<ToggleDef[]>(() => [
   { key: 'ev', label: '事件', labelClass: 'event-tag event-tag-ev', title: '在时间轴上标出飞行事件', checked: () => chart.value.showEvents, change: () => { chart.value.showEvents = !chart.value.showEvents; onEventMarkToggle() } },
   { key: 'msg', label: '消息', labelClass: 'event-tag event-tag-msg', title: '在时间轴上标出文本消息', checked: () => chart.value.showMessages, change: () => { chart.value.showMessages = !chart.value.showMessages; onEventMarkToggle() } },
   { key: 'ai', label: 'AI标记', labelClass: 'event-tag event-tag-ai', title: '在时间轴上标出 AI 分析的问题时段', checked: () => chart.value.showAiMarks, change: () => { chart.value.showAiMarks = !chart.value.showAiMarks; onEventMarkToggle() } },
+  { key: 'aicurve', label: 'AI曲线', labelClass: 'event-tag event-tag-ai', title: '一键移除/恢复 AI 定位问题时自动加载的曲线', checked: () => chartStore.aiCurvesActive, change: () => { void chartStore.toggleAiCurves() } },
 ])
 
 const threeToggles = computed<ToggleDef[]>(() => [
