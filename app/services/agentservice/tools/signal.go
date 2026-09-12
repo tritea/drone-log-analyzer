@@ -22,8 +22,8 @@ const (
 
 type signalQuery struct {
 	Name      string   `json:"name" jsonschema:"required" jsonschema_description:"字段全名 GROUP.Field，如 GPS.NSats、CTUN.ThrOut"`
-	StartAt   *float64 `json:"start_at,omitempty" jsonschema_description:"窗口起点（秒，相对日志起点），缺省=从头"`
-	EndAt     *float64 `json:"end_at,omitempty" jsonschema_description:"窗口终点（秒），缺省=到尾"`
+	StartSec  *float64 `json:"start_sec,omitempty" jsonschema_description:"窗口起点（秒，相对日志起点），缺省=从头"`
+	EndSec    *float64 `json:"end_sec,omitempty" jsonschema_description:"窗口终点（秒），缺省=到尾"`
 	Operation string   `json:"operation" jsonschema:"required" jsonschema_description:"raw/min/max/avg/minmax/p2p/derivative/trend/peaks/abnormal"`
 	Threshold *float64 `json:"threshold,omitempty" jsonschema_description:"abnormal 的显式阈值；缺省用知识库分级阈值"`
 	MaxPoints int      `json:"max_points,omitempty" jsonschema_description:"raw 的降采样点数上限，默认2000"`
@@ -40,6 +40,7 @@ type abnormalLevel struct {
 }
 
 // abnSegment 是越限段的对外形态：相对秒 + 绝对时刻（供报告直接引用）。
+// 命名约定：Sec 后缀=相对秒，At 后缀=绝对时刻（本地时区）。
 type abnSegment struct {
 	Start    float64 `json:"start"`
 	End      float64 `json:"end"`
@@ -50,22 +51,41 @@ type abnSegment struct {
 	Extent   float64 `json:"extent"`
 }
 
+// statsOut 等在 fieldstats 统计上补绝对时刻：minAt/maxAt 等是相对秒，
+// 模型照抄会输出 "1009s" 这类没人看得懂的裸相对秒——补 *AtTime 让
+// 绝对时刻随手可抄（无 UTC 基准时 At 返回空、字段省略）。
+type statsOut struct {
+	fieldstats.BasicStats
+	MinAtTime string `json:"minAtTime,omitempty"`
+	MaxAtTime string `json:"maxAtTime,omitempty"`
+}
+
+type derivativeOut struct {
+	fieldstats.DerivativeStats
+	MaxRateAtTime string `json:"maxRateAtTime,omitempty"`
+}
+
+type peaksOut struct {
+	fieldstats.PeakStats
+	MaxPeakAtTime string `json:"maxPeakAtTime,omitempty"`
+}
+
 type queryResult struct {
 	Name      string  `json:"name"`
 	Operation string  `json:"operation"`
-	StartAt   float64 `json:"startAt"`
-	EndAt     float64 `json:"endAt"`
+	StartSec  float64 `json:"startSec"` // 查询窗口（相对秒；模型传入的回显）
+	EndSec    float64 `json:"endSec"`
 	TimeBase  string  `json:"timeBase,omitempty"` // 相对秒 0 对应的绝对时刻（本地时区）
 	Samples   int     `json:"samples,omitempty"`
 
-	Points     [][2]float64                `json:"points,omitempty"` // raw
-	Stats      *fieldstats.BasicStats      `json:"stats,omitempty"`  // min/max/avg/minmax/p2p
-	Derivative *fieldstats.DerivativeStats `json:"derivative,omitempty"`
-	Trend      *fieldstats.TrendStats      `json:"trend,omitempty"`
-	Peaks      *fieldstats.PeakStats       `json:"peaks,omitempty"`
-	Abnormal   []abnormalLevel             `json:"abnormal,omitempty"`
+	Points     [][2]float64           `json:"points,omitempty"` // raw：[相对秒, 值]
+	Stats      *statsOut              `json:"stats,omitempty"`  // min/max/avg/minmax/p2p
+	Derivative *derivativeOut         `json:"derivative,omitempty"`
+	Trend      *fieldstats.TrendStats `json:"trend,omitempty"`
+	Peaks      *peaksOut              `json:"peaks,omitempty"`
+	Abnormal   []abnormalLevel        `json:"abnormal,omitempty"`
 
-	WindowStart   float64 `json:"windowStart,omitempty"` // 实际命中的窗口首末时刻
+	WindowStart   float64 `json:"windowStart,omitempty"` // 实际命中的窗口首末（相对秒）
 	WindowEnd     float64 `json:"windowEnd,omitempty"`
 	WindowStartAt string  `json:"windowStartAt,omitempty"` // 窗口首末的绝对时刻
 	WindowEndAt   string  `json:"windowEndAt,omitempty"`
@@ -113,13 +133,13 @@ func runQuery(ctx context.Context, deps Deps, q signalQuery) queryResult {
 	}
 	s := fieldstats.Series{Times: sr.Times, Values: sr.Values}
 	t0, t1 := 0.0, 0.0
-	if q.StartAt != nil {
-		t0 = *q.StartAt
+	if q.StartSec != nil {
+		t0 = *q.StartSec
 	}
-	if q.EndAt != nil {
-		t1 = *q.EndAt
+	if q.EndSec != nil {
+		t1 = *q.EndSec
 	}
-	res.StartAt, res.EndAt = t0, t1
+	res.StartSec, res.EndSec = t0, t1
 	res.TimeBase = deps.Abs.Start()
 	win := fieldstats.Slice(s, t0, t1)
 	res.Samples = win.Len()
@@ -147,16 +167,16 @@ func runQuery(ctx context.Context, deps Deps, q signalQuery) queryResult {
 	case fieldstats.OpMin, fieldstats.OpMax, fieldstats.OpAvg,
 		fieldstats.OpMinMax, fieldstats.OpP2P:
 		st := fieldstats.Stats(win)
-		res.Stats = &st
+		res.Stats = &statsOut{BasicStats: st, MinAtTime: deps.Abs.At(st.MinAt), MaxAtTime: deps.Abs.At(st.MaxAt)}
 	case fieldstats.OpDerivative:
 		d := fieldstats.Derivative(win)
-		res.Derivative = &d
+		res.Derivative = &derivativeOut{DerivativeStats: d, MaxRateAtTime: deps.Abs.At(d.MaxRateAt)}
 	case fieldstats.OpTrend:
 		tr := fieldstats.Trend(win)
 		res.Trend = &tr
 	case fieldstats.OpPeaks:
 		ps := fieldstats.Peaks(win, 0)
-		res.Peaks = &ps
+		res.Peaks = &peaksOut{PeakStats: ps, MaxPeakAtTime: deps.Abs.At(ps.MaxPeakAt)}
 	case fieldstats.OpAbnormal:
 		res.Abnormal = runAbnormal(deps, g, f, win, q.Threshold)
 		if len(res.Abnormal) == 0 {
