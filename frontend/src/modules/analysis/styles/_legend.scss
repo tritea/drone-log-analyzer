@@ -58,5 +58,30 @@
   color: var(--text);
 }
 
+// 移除按钮：默认隐藏，图例项 hover 时出现（与眼睛按钮同款触达）。
+.legend-del-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--text3);
+  cursor: pointer;
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+}
+
+.chart-legend-item:hover .legend-del-btn { opacity: 1; }
+
+.legend-del-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
 .chart-legend-item.is-drawn-off .chart-legend-line { opacity: 0.25; }
 .chart-legend-item.is-drawn-off .chart-legend-name { opacity: 0.45; }

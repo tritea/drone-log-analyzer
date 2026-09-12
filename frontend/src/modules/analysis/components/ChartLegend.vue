@@ -7,7 +7,7 @@ import AppIcon from '@/modules/shared/components/AppIcon.vue'
 const { ui } = storeToRefs(useUiStore())
 const chartStore = useAnalysisStore()
 const { visibleCurves } = storeToRefs(chartStore)
-const { isCurveDrawn, toggleCurveDrawn } = chartStore
+const { isCurveDrawn, toggleCurveDrawn, removeCurveById } = chartStore
 </script>
 
 <template>
@@ -28,6 +28,14 @@ const { isCurveDrawn, toggleCurveDrawn } = chartStore
         @click="toggleCurveDrawn(curve)"
       >
         <AppIcon name="eye" :size="13" />
+      </button>
+      <button
+        class="legend-del-btn"
+        type="button"
+        title="移除曲线（从图表删除并保存）"
+        @click="removeCurveById(curve.id)"
+      >
+        <AppIcon name="close" :size="12" />
       </button>
     </div>
   </div>
