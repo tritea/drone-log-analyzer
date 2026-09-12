@@ -199,6 +199,21 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 	round = append(round, schema.UserMessage(msg))
 	round = append(round, r.msgs...)
 	sess.extend(round)
+
+	// 缺合法 incident 机读块时静默补一轮（模型偶尔漏输出或写成排版文本）：
+	// 用无工具的轻量 agent 把已有结论转成纯 JSON，拼到回答末尾并同步历史。
+	if len(answer) > 200 && !looksLikeIncidentJSON(answer) {
+		if patch := s.incidentPatch(runCtx, cfg, sess); patch != "" {
+			answer += "\n\n" + patch
+			final.Content = answer
+			for i := len(round) - 1; i >= 0; i-- {
+				if m := round[i]; m.Role == schema.Assistant && len(m.ToolCalls) == 0 {
+					m.Content = answer
+					break
+				}
+			}
+		}
+	}
 	sess.save()
 	s.emitFinal(final)
 	return &agentservice.ChatResponse{Message: final}, nil

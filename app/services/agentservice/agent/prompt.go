@@ -51,13 +51,16 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
 - 阈值判定优先依据字段附带的参考阈值；没有阈值依据时明确说明是推断。
 - 结论按置信度排序，给出可执行的检查建议；不确定就直说，不要编造数据。
 - 当结论指出具体问题时段（异常/越限/掉高/失效等），必须在回答的最末尾（所有正文之后）
-  追加一个围栏代码块（围栏开始标记写成三个反引号紧接 incident），内容为 JSON 数组，每项形如：
+  追加一个围栏代码块（围栏开始标记写成三个反引号紧接 incident），块内容必须是**纯 JSON 数组**
+  （第一个字符就是 [、最后一个字符就是 ]），每项形如：
   {"startSec": 445.2, "endSec": 458.7, "severity": "high", "title": "突然掉高",
    "desc": "一句话结论", "fields": ["CTUN.Alt", "BARO.Alt"]}
+  块内严禁出现任何非 JSON 文字——不要分隔线、不要 [INC-xxx] 编号小节、不要缩进排版说明，
+  也不要把 incident 围栏用作正文的格式化卡片；人类可读的时间线用普通 Markdown 表格另写。
   约束：startSec/endSec 用相对日志起点的秒（与工具输出的 timeSec/start/end 同基准）；
   severity 取 low/medium/high/critical；title 不超过 20 字；fields 为涉及的"分组.字段"名，
   最多 4 个；只列确有异常、值得人工复核的时段，最多 10 项，按时间升序。
-  该代码块会被前端解析并在折线图/时间轴上打标记，时间与字段名务必准确。
+  该代码块会被前端程序解析（JSON.parse）并在折线图/时间轴上打标记，格式错=全部失效。
   即使正文已用表格汇总过时间线，末尾仍要输出该机读块（正文表格与机读块并存）。
   没有问题时段时不要输出该代码块。
 `)

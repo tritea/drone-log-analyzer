@@ -73,7 +73,15 @@ function parseBlock(body: string): Incident[] {
   try {
     raw = JSON.parse(body);
   } catch {
-    return [];
+    // 块内混有说明文字（模型把机读块写成排版小节）：提取首个 [ 到末个 ] 的内嵌 JSON 再试
+    const lo = body.indexOf('[');
+    const hi = body.lastIndexOf(']');
+    if (lo < 0 || hi <= lo) return [];
+    try {
+      raw = JSON.parse(body.slice(lo, hi + 1));
+    } catch {
+      return [];
+    }
   }
   const arr = Array.isArray(raw)
     ? raw
