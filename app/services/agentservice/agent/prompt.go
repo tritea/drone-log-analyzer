@@ -58,6 +58,7 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
   severity 取 low/medium/high/critical；title 不超过 20 字；fields 为涉及的"分组.字段"名，
   最多 4 个；只列确有异常、值得人工复核的时段，最多 10 项，按时间升序。
   该代码块会被前端解析并在折线图/时间轴上打标记，时间与字段名务必准确。
+  即使正文已用表格汇总过时间线，末尾仍要输出该机读块（正文表格与机读块并存）。
   没有问题时段时不要输出该代码块。
 `)
 	return b.String()

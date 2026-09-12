@@ -33,6 +33,7 @@ const MAX_FIELDS = 4;
 const MAX_TITLE_LEN = 40;
 const MAX_DESC_LEN = 200;
 const FENCE_RE = /```incident[^\n]*\n([\s\S]*?)```/g;
+const ANY_FENCE_RE = /```[^\n]*\n([\s\S]*?)```/g;
 const SEVERITIES = ['low', 'medium', 'high', 'critical'];
 
 function normalizeSeverity(v: unknown): IncidentSeverity {
@@ -66,32 +67,58 @@ function normalizeItem(raw: unknown): Incident | null {
   };
 }
 
-/** 从一条助手消息解析问题时段：取最后一个合法 incident 块（模型多轮修订时以最终版为准）。 */
-export function parseIncidents(content: string): Incident[] {
-  if (!content) return [];
-  const blocks = [...content.matchAll(FENCE_RE)];
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    try {
-      const raw: unknown = JSON.parse(blocks[i][1]);
-      const arr = Array.isArray(raw)
-        ? raw
-        : raw && typeof raw === 'object' && Array.isArray((raw as { incidents?: unknown }).incidents)
-          ? (raw as { incidents: unknown[] }).incidents
-          : null;
-      if (!arr) continue;
-      const out = arr.map(normalizeItem).filter((x): x is Incident => !!x).slice(0, MAX_INCIDENTS);
-      if (out.length) return out;
-    } catch {
-      // 非法 JSON：忽略该块，继续找更早的
-    }
+/** 单个围栏内容 → 规范化 incident 列表（JSON 非法或形状不符返回空）。 */
+function parseBlock(body: string): Incident[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(body);
+  } catch {
+    return [];
   }
-  return [];
+  const arr = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === 'object' && Array.isArray((raw as { incidents?: unknown }).incidents)
+      ? (raw as { incidents: unknown[] }).incidents
+      : null;
+  if (!arr) return [];
+  return arr.map(normalizeItem).filter((x): x is Incident => !!x).slice(0, MAX_INCIDENTS);
 }
 
-/** 展示用内容：剥离机读 incident 块（UI 中以可点击标记卡片呈现，避免原始 JSON 干扰阅读）。 */
+interface AdoptedBlock {
+  start: number;
+  end: number;
+  list: Incident[];
+}
+
+/**
+ * 定位被采纳的 incident 块：显式 ```incident 标记优先（多条时取最后一个＝最终版）；
+ * 没有显式标记时兜底扫描所有围栏代码块，找形状匹配的 JSON（模型偶尔把语言
+ * 标记写成 json 或留空）。形状校验由 normalizeItem 保证——普通 JSON（如参数
+ * 表）没有 startSec+title 结构，不会误判。
+ */
+function adoptBlock(content: string): AdoptedBlock | null {
+  let hit: AdoptedBlock | null = null;
+  for (const m of content.matchAll(FENCE_RE)) {
+    const list = parseBlock(m[1]);
+    if (list.length) hit = { start: m.index ?? 0, end: (m.index ?? 0) + m[0].length, list };
+  }
+  if (hit) return hit;
+  for (const m of content.matchAll(ANY_FENCE_RE)) {
+    const list = parseBlock(m[1]);
+    if (list.length) return { start: m.index ?? 0, end: (m.index ?? 0) + m[0].length, list };
+  }
+  return null;
+}
+
+/** 从一条助手消息解析问题时段（被采纳块内的机读列表）。 */
+export function parseIncidents(content: string): Incident[] {
+  if (!content) return [];
+  return adoptBlock(content)?.list ?? [];
+}
+
+/** 展示用内容：剥离被采纳的机读块（UI 中以可点击标记卡片呈现，避免原始 JSON 干扰阅读）。 */
 export function stripIncidentBlock(content: string): string {
-  return content
-    .replace(FENCE_RE, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  const hit = adoptBlock(content);
+  if (!hit) return content;
+  return (content.slice(0, hit.start) + content.slice(hit.end)).replace(/\n{3,}/g, '\n\n').trim();
 }
