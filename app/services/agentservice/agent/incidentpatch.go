@@ -41,11 +41,13 @@ const incidentPatchPrompt = "请把上面结论中的问题时段（异常/越�
 
 // incidentPatch 跑一轮无工具的格式转换：基于已含本轮结论的会话历史，让
 // 模型只做"结论→JSON"的转换（不查数据，token 开销小）。返回补块文本
-// （含围栏）；无块/失败返回空串。
-func (s *service) incidentPatch(ctx context.Context, cfg *appmodel.LlmConfig, sess *session) string {
+// （含围栏）与内部 run（其 usage 供调用方并入本轮统计）；无块/失败时文本
+// 为空串，run 仍带出已产生的消耗。
+func (s *service) incidentPatch(ctx context.Context, cfg *appmodel.LlmConfig, sess *session) (*run, string) {
+	r := newRun(nil) // sink=nil：补块不推流，避免与当前轮的 streaming 文本混排
 	cm, err := buildChatModel(ctx, cfg)
 	if err != nil {
-		return ""
+		return r, ""
 	}
 	ag, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Instruction: "你是格式转换器：把对话里已有的分析结论转换为机读 JSON。" +
@@ -54,10 +56,9 @@ func (s *service) incidentPatch(ctx context.Context, cfg *appmodel.LlmConfig, se
 		MaxIterations: 2, // 无工具，一轮即出；2 为异常保险
 	})
 	if err != nil {
-		return ""
+		return r, ""
 	}
 	input := append(trimContext(sess.snapshot()), schema.UserMessage(incidentPatchPrompt))
-	r := newRun(nil) // sink=nil：补块不推流，避免与当前轮的 streaming 文本混排
 	iter := ag.Run(ctx, &adk.AgentInput{Messages: input})
 	for {
 		ev, ok := iter.Next()
@@ -65,18 +66,18 @@ func (s *service) incidentPatch(ctx context.Context, cfg *appmodel.LlmConfig, se
 			break
 		}
 		if ev.Err != nil {
-			return ""
+			return r, ""
 		}
 		if ev.Output == nil || ev.Output.MessageOutput == nil {
 			continue
 		}
 		if err := r.handle(ev.Output.MessageOutput); err != nil {
-			return ""
+			return r, ""
 		}
 	}
 	text := strings.TrimSpace(r.finalAnswer())
 	if !looksLikeIncidentJSON(text) {
-		return ""
+		return r, ""
 	}
-	return text
+	return r, text
 }

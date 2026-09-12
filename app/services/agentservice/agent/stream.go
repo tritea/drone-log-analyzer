@@ -18,8 +18,15 @@ type run struct {
 
 	msgs []*schema.Message // 本轮收集的 user/assistant/tool 交错序列
 
-	// usage 是模型最近一次上报的 token 用量（流式通常在最后一个 chunk）。
-	usage *schema.TokenUsage
+	// callUsage 是当前模型调用内最近一次上报的 token 用量（流式通常在
+	// 最后一个 chunk），调用收口（assistant）时并入 sums 并清空。
+	callUsage *schema.TokenUsage
+
+	// sums 是本轮全部模型调用的累计用量：ReAct 每次迭代都是一次独立调用
+	// 且重发全上下文，服务商按次计费，须累加而非只记最后一次。
+	sumPrompt     int
+	sumCompletion int
+	sumTotal      int
 
 	// pending 记录每个 ToolCallID 的开始时刻，工具结果到达时计算耗时。
 	pending map[string]time.Time
@@ -69,8 +76,9 @@ func (r *run) assistant(msg *schema.Message) {
 	}
 	r.msgs = append(r.msgs, msg)
 	if msg.ResponseMeta != nil && msg.ResponseMeta.Usage != nil {
-		r.usage = msg.ResponseMeta.Usage
+		r.callUsage = msg.ResponseMeta.Usage
 	}
+	r.commitUsage()
 	if len(msg.ToolCalls) == 0 {
 		if msg.ReasoningContent != "" {
 			r.emit(agentservice.AgentEvent{Type: "reasoning", Text: msg.ReasoningContent})
@@ -109,6 +117,7 @@ func (r *run) consumeStream(sr *schema.StreamReader[*schema.Message]) error {
 			break
 		}
 		if err != nil {
+			r.commitUsage() // 收口中断的调用，避免已上报的用量丢失
 			return err
 		}
 		if f.ReasoningContent != "" {
@@ -118,7 +127,7 @@ func (r *run) consumeStream(sr *schema.StreamReader[*schema.Message]) error {
 			r.emit(agentservice.AgentEvent{Type: "delta", Text: f.Content})
 		}
 		if f.ResponseMeta != nil && f.ResponseMeta.Usage != nil {
-			r.usage = f.ResponseMeta.Usage
+			r.callUsage = f.ResponseMeta.Usage
 		}
 		frames = append(frames, f)
 	}
@@ -131,6 +140,33 @@ func (r *run) consumeStream(sr *schema.StreamReader[*schema.Message]) error {
 	}
 	r.assistant(final)
 	return nil
+}
+
+// commitUsage 把当前调用的用量并入轮累计。assistant 是每次模型调用的
+// 收口点（流式合并后 / 非流式各调一次），在此提交恰好每调用计一次。
+func (r *run) commitUsage() {
+	if r.callUsage == nil {
+		return
+	}
+	r.sumPrompt += r.callUsage.PromptTokens
+	r.sumCompletion += r.callUsage.CompletionTokens
+	// TotalTokens 缺失（0）时按 prompt+completion 归一，保证 Σ 口径一致。
+	total := r.callUsage.TotalTokens
+	if total == 0 {
+		total = r.callUsage.PromptTokens + r.callUsage.CompletionTokens
+	}
+	r.sumTotal += total
+	r.callUsage = nil
+}
+
+// addUsage 把另一 run（incidentPatch 的补块调用）的累计并入本 run。
+func (r *run) addUsage(o *run) {
+	if o == nil {
+		return
+	}
+	r.sumPrompt += o.sumPrompt
+	r.sumCompletion += o.sumCompletion
+	r.sumTotal += o.sumTotal
 }
 
 // finalAnswer 返回最后一条纯文本助手消息（没有则空串）。
