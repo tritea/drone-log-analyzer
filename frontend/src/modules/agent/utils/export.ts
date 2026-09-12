@@ -1,5 +1,5 @@
-import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { agentMd } from './markdown';
 import type { ChatMessage } from '@/services/agent';
 import { useCurveManagerStore } from '@/modules/curves';
 import type { CurveBinary } from '@/modules/analysis/utils/curve-binary';
@@ -20,7 +20,7 @@ export function buildMarkdown(messages: ChatMessage[]): string {
 export function buildPrintHtml(messages: ChatMessage[], appendix = ''): string {
   const blocks = messages
     .filter((m) => m.role === 'assistant' && m.content)
-    .map((m) => DOMPurify.sanitize(marked.parse(stripIncidentBlock(m.content), { async: false }) as string))
+    .map((m) => DOMPurify.sanitize(agentMd.parse(stripIncidentBlock(m.content), { async: false }) as string))
     .join('\n<hr>\n');
   return `<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <title>AI 分析结果</title>
