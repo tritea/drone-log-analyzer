@@ -24,30 +24,20 @@ func finitePtr(v float64) *float64 {
 
 type missionInput struct{}
 
-type missionWaypoint struct {
-	Sequence    int      `json:"sequence"`
-	Command     int      `json:"command"`
-	CommandName string   `json:"commandName,omitempty"`
-	Latitude    *float64 `json:"latitude,omitempty"`
-	Longitude   *float64 `json:"longitude,omitempty"`
-	Altitude    *float64 `json:"altitude,omitempty"`
-	FrameName   string   `json:"frameName,omitempty"`
-	Param1      *float64 `json:"param1,omitempty"`
-	Param2      *float64 `json:"param2,omitempty"`
-	Param3      *float64 `json:"param3,omitempty"`
-	Param4      *float64 `json:"param4,omitempty"`
-}
+// waypointCols：cmd 缺名时为 "#<命令号>"；p1~p4 为命令参数（行尾空列省略）。
+var waypointCols = []string{"seq", "cmd", "lat", "lon", "alt", "frame", "p1", "p2", "p3", "p4"}
 
 type missionVersion struct {
-	TimeSec   float64           `json:"timeSec"`        // 版本首条命令的相对秒
-	Time      string            `json:"time,omitempty"` // 对应绝对时刻（本地时区）
-	Count     int               `json:"count"`          // 该版航点总数（waypoints 截断时>len）
-	Truncated bool              `json:"truncated,omitempty"`
-	Waypoints []missionWaypoint `json:"waypoints"`
+	TSec      float64 `json:"tSec"`        // 版本首条命令的相对秒
+	T         string  `json:"t,omitempty"` // 对应绝对时刻（短格式；cols 见外层）
+	Count     int     `json:"count"`       // 该版航点总数（wp 截断时>len）
+	Truncated bool    `json:"truncated,omitempty"`
+	Waypoints [][]any `json:"wp"`
 }
 
 type missionOutput struct {
-	TimeBase  string           `json:"timeBase,omitempty"`
+	TimeBase  string           `json:"timeBase,omitempty"` // tSec=0 对应的绝对时刻（完整日期）
+	Cols      []string         `json:"cols"`
 	Versions  int              `json:"versions"` // 航线版本数（飞行中重新上传即新版本）
 	Count     int              `json:"count"`    // 航点命令总数
 	Truncated bool             `json:"truncated,omitempty"`
@@ -59,15 +49,16 @@ type missionOutput struct {
 // 版本切换时刻本身常是事故线索。
 func missionTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_mission",
-		"获取任务航线（航点序列）：每版含上传时刻与航点列表（序号/命令/坐标/高度/参数），"+
-			"高度参考 frameName（相对/绝对）。飞行中航线被重新上传会产生多个版本，"+
-			"版本切换时刻值得重点关注。无航线记录时 versions=0。",
+		"获取任务航线（航点序列）：每版含上传时刻与航点行数组（cols 标列序，行尾空列省略；"+
+			"seq/cmd/坐标/高度/参数），cmd 缺名时为 #<命令号>，高度参考 frame（相对/绝对）。"+
+			"飞行中航线被重新上传会产生多个版本，版本切换时刻值得重点关注。"+
+			"无航线记录时 versions=0。",
 		func(ctx context.Context, in missionInput) (missionOutput, error) {
 			cmds, err := deps.Log.Commands(ctx)
 			if err != nil {
 				return missionOutput{}, err
 			}
-			out := missionOutput{TimeBase: deps.Abs.Start(), Count: len(cmds)}
+			out := missionOutput{TimeBase: deps.Abs.Start(), Cols: waypointCols, Count: len(cmds)}
 			sorted := make([]logservice.CommandEntry, len(cmds))
 			copy(sorted, cmds)
 			sort.SliceStable(sorted, func(i, j int) bool {
@@ -83,26 +74,20 @@ func missionTool(deps Deps) (tool.InvokableTool, error) {
 			for _, c := range sorted {
 				if cur == nil || c.Sequence <= prevSeq {
 					out.Items = append(out.Items, missionVersion{
-						TimeSec:   c.TimeMs / 1000,
-						Waypoints: make([]missionWaypoint, 0, 16),
+						TSec:      c.TimeMs / 1000,
+						Waypoints: make([][]any, 0, 16),
 					})
 					cur = &out.Items[len(out.Items)-1]
 				}
 				cur.Count++
 				if len(cur.Waypoints) < maxMissionPoints {
-					cur.Waypoints = append(cur.Waypoints, missionWaypoint{
-						Sequence:    c.Sequence,
-						Command:     c.Command,
-						CommandName: c.CommandName,
-						Latitude:    finitePtr(c.Latitude),
-						Longitude:   finitePtr(c.Longitude),
-						Altitude:    finitePtr(c.Altitude),
-						FrameName:   c.FrameName,
-						Param1:      finitePtr(c.Param1),
-						Param2:      finitePtr(c.Param2),
-						Param3:      finitePtr(c.Param3),
-						Param4:      finitePtr(c.Param4),
-					})
+					cur.Waypoints = append(cur.Waypoints, trimRow([]any{
+						c.Sequence, nameOrID(c.CommandName, c.Command),
+						ptrVal(finitePtr(c.Latitude)), ptrVal(finitePtr(c.Longitude)), ptrVal(finitePtr(c.Altitude)),
+						c.FrameName,
+						ptrVal(finitePtr(c.Param1)), ptrVal(finitePtr(c.Param2)),
+						ptrVal(finitePtr(c.Param3)), ptrVal(finitePtr(c.Param4)),
+					}))
 				} else {
 					cur.Truncated = true
 					out.Truncated = true
@@ -115,7 +100,7 @@ func missionTool(deps Deps) (tool.InvokableTool, error) {
 				out.Truncated = true
 			}
 			for i := range out.Items {
-				out.Items[i].Time = deps.Abs.At(out.Items[i].TimeSec)
+				out.Items[i].T = deps.Abs.AtShort(out.Items[i].TSec)
 			}
 			return out, nil
 		})
@@ -127,30 +112,16 @@ type mavlinkCommandsInput struct {
 	Command string `json:"command,omitempty" jsonschema_description:"按命令名过滤（包含匹配、忽略大小写），如 LAND、RETURN、MISSION、JUMP；缺省返回全部"`
 }
 
-type mavlinkCommandEntry struct {
-	TimeSec     float64  `json:"timeSec"`
-	Time        string   `json:"time,omitempty"`
-	Command     int      `json:"command"`
-	CommandName string   `json:"commandName,omitempty"`
-	Via         string   `json:"via,omitempty"`  // COMMAND_LONG / COMMAND_INT
-	From        string   `json:"from,omitempty"` // 来源 sys.comp（255.190=典型地面站）
-	To          string   `json:"to,omitempty"`   // 目标 sys.comp
-	Result      int      `json:"result"`
-	ResultName  string   `json:"resultName,omitempty"` // ACK 结果（ACCEPTED/DENIED/TIMEOUT…）
-	Latitude    *float64 `json:"latitude,omitempty"`
-	Longitude   *float64 `json:"longitude,omitempty"`
-	Altitude    *float64 `json:"altitude,omitempty"`
-	Param1      *float64 `json:"param1,omitempty"`
-	Param2      *float64 `json:"param2,omitempty"`
-	Param3      *float64 `json:"param3,omitempty"`
-	Param4      *float64 `json:"param4,omitempty"`
-}
+// mavlinkCols：t=绝对时刻短格式（日期基准见 timeBase）；cmd/result 缺名时为
+// "#<编号>"；via=LONG/INT；from/to=sys.comp（255.190=典型地面站）。
+var mavlinkCols = []string{"t", "tSec", "cmd", "via", "from", "to", "result", "lat", "lon", "alt", "p1", "p2", "p3", "p4"}
 
 type mavlinkCommandsOutput struct {
-	TimeBase  string                `json:"timeBase,omitempty"`
-	Count     int                   `json:"count"` // 命中总数（entries 可能被截断）
-	Truncated bool                  `json:"truncated,omitempty"`
-	Entries   []mavlinkCommandEntry `json:"entries"`
+	TimeBase  string   `json:"timeBase,omitempty"` // tSec=0 对应的绝对时刻（完整日期）
+	Cols      []string `json:"cols"`
+	Count     int      `json:"count"` // 命中总数（rows 可能被截断）
+	Truncated bool     `json:"truncated,omitempty"`
+	Rows      [][]any  `json:"rows"`
 }
 
 // mavlinkCommandsTool 返回飞行中收到的 MAVLink 命令流（COMMAND_LONG/COMMAND_INT
@@ -158,46 +129,36 @@ type mavlinkCommandsOutput struct {
 // 命令时刻与执行结果（result）是关键证据。
 func mavlinkCommandsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_mavlink_commands",
-		"获取飞行中收到的 MAVLink 命令流（含 COMMAND_LONG/INT 与执行结果 result/"+
-			"resultName，来源 from=255.190 通常为地面站）。可用 command 按命令名过滤"+
-			"（如 LAND、RETURN、MISSION）。判断\"是否地面站突然下发命令\"就查这个工具；"+
-			"无记录时 count=0。",
+		"获取飞行中收到的 MAVLink 命令流，结果为行数组（cols 标列序，行尾空列省略）："+
+			"t/cmd=时刻与命令名，result=执行结果（ACCEPTED/DENIED/TIMEOUT…），"+
+			"from=255.190 通常为地面站。可用 command 按命令名过滤（如 LAND、RETURN、MISSION）。"+
+			"判断\"是否地面站突然下发命令\"就查这个工具；无记录时 count=0。",
 		func(ctx context.Context, in mavlinkCommandsInput) (mavlinkCommandsOutput, error) {
 			cmds, err := deps.Log.MAVLinkCommands(ctx)
 			if err != nil {
 				return mavlinkCommandsOutput{}, err
 			}
 			filter := strings.ToUpper(strings.TrimSpace(in.Command))
-			out := mavlinkCommandsOutput{TimeBase: deps.Abs.Start()}
+			out := mavlinkCommandsOutput{TimeBase: deps.Abs.Start(), Cols: mavlinkCols}
 			for _, c := range cmds {
-				if filter != "" && !strings.Contains(strings.ToUpper(c.CommandName), filter) {
+				// 过滤匹配显示名（缺名时为 "#<命令号>"），行里看到什么就能按什么筛。
+				if filter != "" && !strings.Contains(strings.ToUpper(nameOrID(c.CommandName, c.Command)), filter) {
 					continue
 				}
 				out.Count++
-				if len(out.Entries) >= maxMavlinkEntries {
+				if len(out.Rows) >= maxMavlinkEntries {
 					out.Truncated = true
 					continue
 				}
-				out.Entries = append(out.Entries, mavlinkCommandEntry{
-					TimeSec:     c.TimeMs / 1000,
-					Command:     c.Command,
-					CommandName: c.CommandName,
-					Via:         mavlinkVia(c.WasCommandLong),
-					From:        endpoint(c.SourceSystem, c.SourceComponent),
-					To:          endpoint(c.TargetSystem, c.TargetComponent),
-					Result:      c.Result,
-					ResultName:  c.ResultName,
-					Latitude:    finitePtr(c.Latitude),
-					Longitude:   finitePtr(c.Longitude),
-					Altitude:    finitePtr(c.Altitude),
-					Param1:      finitePtr(c.Param1),
-					Param2:      finitePtr(c.Param2),
-					Param3:      finitePtr(c.Param3),
-					Param4:      finitePtr(c.Param4),
-				})
-			}
-			for i := range out.Entries {
-				out.Entries[i].Time = deps.Abs.At(out.Entries[i].TimeSec)
+				sec := c.TimeMs / 1000
+				out.Rows = append(out.Rows, trimRow([]any{
+					deps.Abs.AtShort(sec), sec, nameOrID(c.CommandName, c.Command),
+					mavlinkVia(c.WasCommandLong), endpoint(c.SourceSystem, c.SourceComponent), endpoint(c.TargetSystem, c.TargetComponent),
+					nameOrID(c.ResultName, c.Result),
+					ptrVal(finitePtr(c.Latitude)), ptrVal(finitePtr(c.Longitude)), ptrVal(finitePtr(c.Altitude)),
+					ptrVal(finitePtr(c.Param1)), ptrVal(finitePtr(c.Param2)),
+					ptrVal(finitePtr(c.Param3)), ptrVal(finitePtr(c.Param4)),
+				}))
 			}
 			return out, nil
 		})
@@ -205,9 +166,9 @@ func mavlinkCommandsTool(deps Deps) (tool.InvokableTool, error) {
 
 func mavlinkVia(wasLong bool) string {
 	if wasLong {
-		return "COMMAND_LONG"
+		return "LONG"
 	}
-	return "COMMAND_INT"
+	return "INT"
 }
 
 // endpoint 渲染 sys.comp 端点；全零（广播/未指定）返回空。

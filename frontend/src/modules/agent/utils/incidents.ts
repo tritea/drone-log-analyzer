@@ -10,7 +10,7 @@ export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical';
 export interface Incident {
   /** 稳定 id（起始秒-结束秒-标题），跨消息去重与点击回查用。 */
   id: string;
-  /** 相对日志起点的秒（与后端工具 timeSec 同基准）。 */
+  /** 相对日志起点的秒（与后端工具输出的 tSec 列同基准）。 */
   startSec: number;
   endSec: number;
   severity: IncidentSeverity;

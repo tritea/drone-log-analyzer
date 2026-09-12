@@ -26,6 +26,21 @@ func (a *AbsTime) Start() string {
 	return time.Unix(a.StartUnix, 0).Format("2006-01-02 15:04:05")
 }
 
+// AtShort 把相对秒渲染为短时刻（"15:04:05"）：日期与基准日相同时省略
+// 日期（完整日期只在 timeBase 出现一次，消除逐条重复）；跨天条目带
+// "01-02 " 前缀自明。nil 返回空。
+func (a *AbsTime) AtShort(sec float64) string {
+	if a == nil {
+		return ""
+	}
+	base := time.Unix(a.StartUnix, 0)
+	t := base.Add(time.Duration(sec * float64(time.Second)))
+	if y, m, d := t.Date(); y == base.Year() && m == base.Month() && d == base.Day() {
+		return t.Format("15:04:05")
+	}
+	return t.Format("01-02 15:04:05")
+}
+
 // 结果条目上限：工具输出直接进 LLM 上下文，超出即截断并标记 truncated，
 // 提示模型用更精确的过滤条件（时间窗/前缀）分批取。
 const (

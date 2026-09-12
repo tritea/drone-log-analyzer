@@ -26,74 +26,35 @@ type signalQuery struct {
 	EndSec    *float64 `json:"end_sec,omitempty" jsonschema_description:"窗口终点（秒），缺省=到尾"`
 	Operation string   `json:"operation" jsonschema:"required" jsonschema_description:"raw/min/max/avg/minmax/p2p/derivative/trend/peaks/abnormal"`
 	Threshold *float64 `json:"threshold,omitempty" jsonschema_description:"abnormal 的显式阈值；缺省用知识库分级阈值"`
-	MaxPoints int      `json:"max_points,omitempty" jsonschema_description:"raw 的降采样点数上限，默认2000"`
+	MaxPoints int      `json:"max_points,omitempty" jsonschema_description:"raw 的降采样点数上限，默认600"`
 }
 
 type signalInput struct {
 	Queries []signalQuery `json:"queries" jsonschema:"required" jsonschema_description:"批量查询，一次返回全部结果"`
 }
 
-type abnormalLevel struct {
-	Level    string       `json:"level"`
-	Cond     string       `json:"cond"` // 如 "lt 5"
-	Segments []abnSegment `json:"segments"`
-}
-
-// abnSegment 是越限段的对外形态：相对秒 + 绝对时刻（供报告直接引用）。
-// 命名约定：Sec 后缀=相对秒，At 后缀=绝对时刻（本地时区）。
-type abnSegment struct {
-	Start    float64 `json:"start"`
-	End      float64 `json:"end"`
-	StartAt  string  `json:"startAt,omitempty"` // 绝对时刻（本地时区）
-	EndAt    string  `json:"endAt,omitempty"`
-	Duration float64 `json:"duration"`
-	Worst    float64 `json:"worst"`
-	Extent   float64 `json:"extent"`
-}
-
-// statsOut 等在 fieldstats 统计上补绝对时刻：minAt/maxAt 等是相对秒，
-// 模型照抄会输出 "1009s" 这类没人看得懂的裸相对秒——补 *AtTime 让
-// 绝对时刻随手可抄（无 UTC 基准时 At 返回空、字段省略）。
-type statsOut struct {
-	fieldstats.BasicStats
-	MinAtTime string `json:"minAtTime,omitempty"`
-	MaxAtTime string `json:"maxAtTime,omitempty"`
-}
-
-type derivativeOut struct {
-	fieldstats.DerivativeStats
-	MaxRateAtTime string `json:"maxRateAtTime,omitempty"`
-}
-
-type peaksOut struct {
-	fieldstats.PeakStats
-	MaxPeakAtTime string `json:"maxPeakAtTime,omitempty"`
-}
-
+// queryResult 各操作的载荷都是定长数组（列序见工具描述），绝对时刻为短格式
+// （HH:MM:SS，日期基准见外层 timeBase）。命名约定：T 后缀=绝对时刻，
+// At 结尾=相对秒。
 type queryResult struct {
-	Name      string  `json:"name"`
-	Operation string  `json:"operation"`
-	StartSec  float64 `json:"startSec"` // 查询窗口（相对秒；模型传入的回显）
-	EndSec    float64 `json:"endSec"`
-	TimeBase  string  `json:"timeBase,omitempty"` // 相对秒 0 对应的绝对时刻（本地时区）
-	Samples   int     `json:"samples,omitempty"`
+	Name    string    `json:"name"`
+	Op      string    `json:"op"`
+	Win     []float64 `json:"win,omitempty"`  // 实际命中窗口首末（相对秒）
+	WinT    []string  `json:"winT,omitempty"` // 窗口首末绝对时刻（短格式）
+	Samples int       `json:"n,omitempty"`    // 窗口样本数
 
-	Points     [][2]float64           `json:"points,omitempty"` // raw：[相对秒, 值]
-	Stats      *statsOut              `json:"stats,omitempty"`  // min/max/avg/minmax/p2p
-	Derivative *derivativeOut         `json:"derivative,omitempty"`
-	Trend      *fieldstats.TrendStats `json:"trend,omitempty"`
-	Peaks      *peaksOut              `json:"peaks,omitempty"`
-	Abnormal   []abnormalLevel        `json:"abnormal,omitempty"`
-
-	WindowStart   float64 `json:"windowStart,omitempty"` // 实际命中的窗口首末（相对秒）
-	WindowEnd     float64 `json:"windowEnd,omitempty"`
-	WindowStartAt string  `json:"windowStartAt,omitempty"` // 窗口首末的绝对时刻
-	WindowEndAt   string  `json:"windowEndAt,omitempty"`
-	Error         string  `json:"error,omitempty"`
+	Points     [][]float64 `json:"pts,omitempty"`   // raw：[相对秒, 值]
+	Stats      []any       `json:"stats,omitempty"` // [ok,n,min,minAt,max,maxAt,avg,p2p,minT,maxT]
+	Derivative []any       `json:"rate,omitempty"`  // [ok,maxRate,maxRateAt,avgRate,n,maxRateT]
+	Trend      []any       `json:"trend,omitempty"` // [ok,slope,方向,first,last,change,dur]
+	Peaks      []any       `json:"peaks,omitempty"` // [ok,n,maxPeak,maxPeakAt,prominence,maxPeakT]
+	Abnormal   [][]any     `json:"abn,omitempty"`   // 每级 [级别, 条件, [t0,t1,t0T,t1T,worst,extent] 段行]
+	Error      string      `json:"error,omitempty"`
 }
 
 type signalOutput struct {
-	Results []queryResult `json:"results"`
+	TimeBase string        `json:"timeBase,omitempty"` // 相对秒 0 对应的绝对时刻（完整日期，本地时区）
+	Results  []queryResult `json:"results"`
 }
 
 // querySignalTool 是核心数据工具：按 组.字段 + 时间窗 + 运算类型批量查询。
@@ -103,18 +64,25 @@ func querySignalTool(deps Deps) (tool.InvokableTool, error) {
 		"按 分组.字段（如 GPS.NSats）批量查询时间窗内的数据。operation 可选："+
 			"raw(原始点,超量自动抽稀)/min/max/avg/minmax/p2p(峰峰值)/derivative(变化率)/"+
 			"trend(趋势)/peaks(峰值检测)/abnormal(越限段,缺省按参考阈值)。"+
-			"时间单位秒、相对日志起点。不确定字段名先查字段清单。",
+			"时间单位秒、相对日志起点；win/winT=实际命中窗口首末（相对秒/绝对时刻）。"+
+			"各操作载荷为定长数组：stats=[ok,n,min,minAt,max,maxAt,avg,p2p,minT,maxT]、"+
+			"rate=[ok,maxRate,maxRateAt,avgRate,n,maxRateT]、"+
+			"trend=[ok,slope,dir,first,last,change,dur]、"+
+			"peaks=[ok,n,maxPeak,maxPeakAt,prominence,maxPeakT]、"+
+			"abn=每级[级别,条件,[t0,t1,t0T,t1T,worst,extent]段行]（段为 null=该级无越限）。"+
+			"T 后缀=绝对时刻，At 结尾=相对秒；stats/rate 的 ok=false 时载荷仅为 [false]。"+
+			"不确定字段名先查字段清单。",
 		func(ctx context.Context, in signalInput) (signalOutput, error) {
 			results := make([]queryResult, 0, len(in.Queries))
 			for _, q := range in.Queries {
 				results = append(results, runQuery(ctx, deps, q))
 			}
-			return signalOutput{Results: results}, nil
+			return signalOutput{TimeBase: deps.Abs.Start(), Results: results}, nil
 		})
 }
 
 func runQuery(ctx context.Context, deps Deps, q signalQuery) queryResult {
-	res := queryResult{Name: q.Name, Operation: q.Operation}
+	res := queryResult{Name: q.Name}
 	g, f, ok := splitFieldRef(q.Name)
 	if !ok {
 		res.Error = "字段名格式应为 GROUP.Field，如 GPS.NSats"
@@ -125,6 +93,7 @@ func runQuery(ctx context.Context, deps Deps, q signalQuery) queryResult {
 		res.Error = "不支持的 operation: " + q.Operation
 		return res
 	}
+	res.Op = string(op)
 
 	sr, err := deps.Log.Series(ctx, logservice.SeriesRequest{Type: g, Field: f})
 	if err != nil {
@@ -139,15 +108,13 @@ func runQuery(ctx context.Context, deps Deps, q signalQuery) queryResult {
 	if q.EndSec != nil {
 		t1 = *q.EndSec
 	}
-	res.StartSec, res.EndSec = t0, t1
-	res.TimeBase = deps.Abs.Start()
 	win := fieldstats.Slice(s, t0, t1)
 	res.Samples = win.Len()
 	if win.Len() > 0 {
-		res.WindowStart = win.Times[0]
-		res.WindowEnd = win.Times[win.Len()-1]
-		res.WindowStartAt = deps.Abs.At(res.WindowStart)
-		res.WindowEndAt = deps.Abs.At(res.WindowEnd)
+		res.Win = []float64{round3(win.Times[0]), round3(win.Times[win.Len()-1])}
+		if deps.Abs != nil {
+			res.WinT = []string{deps.Abs.AtShort(win.Times[0]), deps.Abs.AtShort(win.Times[win.Len()-1])}
+		}
 	}
 
 	switch op {
@@ -160,23 +127,40 @@ func runQuery(ctx context.Context, deps Deps, q signalQuery) queryResult {
 			maxPoints = maxRawMaxPointsLimit
 		}
 		ds := fieldstats.Downsample(win, maxPoints)
-		res.Points = make([][2]float64, ds.Len())
+		res.Points = make([][]float64, ds.Len())
 		for i := 0; i < ds.Len(); i++ {
-			res.Points[i] = [2]float64{round3(ds.Times[i]), round3(ds.Values[i])}
+			res.Points[i] = []float64{round3(ds.Times[i]), round3(ds.Values[i])}
 		}
 	case fieldstats.OpMin, fieldstats.OpMax, fieldstats.OpAvg,
 		fieldstats.OpMinMax, fieldstats.OpP2P:
 		st := fieldstats.Stats(win)
-		res.Stats = &statsOut{BasicStats: st, MinAtTime: deps.Abs.At(st.MinAt), MaxAtTime: deps.Abs.At(st.MaxAt)}
+		if !st.Ok {
+			res.Stats = []any{false}
+			break
+		}
+		avg := any(st.Avg)
+		if !st.HasAvg {
+			avg = nil
+		}
+		res.Stats = []any{true, st.Count, st.Min, st.MinAt, st.Max, st.MaxAt, avg, st.P2P,
+			deps.Abs.AtShort(st.MinAt), deps.Abs.AtShort(st.MaxAt)}
 	case fieldstats.OpDerivative:
 		d := fieldstats.Derivative(win)
-		res.Derivative = &derivativeOut{DerivativeStats: d, MaxRateAtTime: deps.Abs.At(d.MaxRateAt)}
+		if !d.Ok {
+			res.Derivative = []any{false}
+			break
+		}
+		avg := any(d.AvgRate)
+		if !d.HasAvg {
+			avg = nil
+		}
+		res.Derivative = []any{true, d.MaxRate, d.MaxRateAt, avg, d.Samples, deps.Abs.AtShort(d.MaxRateAt)}
 	case fieldstats.OpTrend:
 		tr := fieldstats.Trend(win)
-		res.Trend = &tr
+		res.Trend = []any{tr.Ok, tr.Slope, tr.Direction, tr.First, tr.Last, tr.Change, tr.Duration}
 	case fieldstats.OpPeaks:
 		ps := fieldstats.Peaks(win, 0)
-		res.Peaks = &peaksOut{PeakStats: ps, MaxPeakAtTime: deps.Abs.At(ps.MaxPeakAt)}
+		res.Peaks = []any{ps.Ok, ps.Count, ps.MaxPeak, ps.MaxPeakAt, ps.Prominence, deps.Abs.AtShort(ps.MaxPeakAt)}
 	case fieldstats.OpAbnormal:
 		res.Abnormal = runAbnormal(deps, g, f, win, q.Threshold)
 		if len(res.Abnormal) == 0 {
@@ -188,14 +172,12 @@ func runQuery(ctx context.Context, deps Deps, q signalQuery) queryResult {
 
 // runAbnormal 逐级扫描越限段：显式 threshold 优先（level=custom），
 // 否则用知识库字段阈值全部等级。
-func runAbnormal(deps Deps, group, field string, win fieldstats.Series, explicit *float64) []abnormalLevel {
-	var out []abnormalLevel
+func runAbnormal(deps Deps, group, field string, win fieldstats.Series, explicit *float64) [][]any {
+	var out [][]any
 	if explicit != nil {
 		cond := fieldstats.Cond{Op: "gt", Value: *explicit}
 		segs := fieldstats.Abnormal(win, cond)
-		out = append(out, abnormalLevel{
-			Level: "custom", Cond: condLabel(cond), Segments: toAbnSegments(deps, segs),
-		})
+		out = append(out, []any{"custom", condLabel(cond), abnRows(deps, segs)})
 		return out
 	}
 	kb := knowledge.ForFormat(deps.Format)
@@ -209,28 +191,25 @@ func runAbnormal(deps Deps, group, field string, win fieldstats.Series, explicit
 			if len(segs) == 0 {
 				continue
 			}
-			out = append(out, abnormalLevel{
-				Level: th.Level, Cond: condLabel(cond), Segments: toAbnSegments(deps, segs),
-			})
+			out = append(out, []any{th.Level, condLabel(cond), abnRows(deps, segs)})
 		}
 	}
 	return out
 }
 
-// toAbnSegments 把统计段映射为对外形态（附绝对时刻）。
-func toAbnSegments(deps Deps, segs []fieldstats.Segment) []abnSegment {
+// abnRows 把越限段映射为段行：[t0,t1,t0T,t1T,worst,extent]（duration=end-start
+// 可推导，不占列）。
+func abnRows(deps Deps, segs []fieldstats.Segment) [][]any {
 	if len(segs) == 0 {
 		return nil
 	}
-	out := make([]abnSegment, len(segs))
+	rows := make([][]any, len(segs))
 	for i, s := range segs {
-		out[i] = abnSegment{
-			Start: round3(s.Start), End: round3(s.End),
-			StartAt: deps.Abs.At(s.Start), EndAt: deps.Abs.At(s.End),
-			Duration: round3(s.Duration), Worst: round3(s.Worst), Extent: round3(s.Extent),
-		}
+		rows[i] = []any{round3(s.Start), round3(s.End),
+			deps.Abs.AtShort(s.Start), deps.Abs.AtShort(s.End),
+			round3(s.Worst), round3(s.Extent)}
 	}
-	return out
+	return rows
 }
 
 func condLabel(c fieldstats.Cond) string {
