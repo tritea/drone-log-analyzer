@@ -486,6 +486,7 @@ func summarize(lg *logparser.LogFile) logservice.SummaryResponse {
 		TypeCount:       len(lg.Curves),
 		StartUnixSecs:   lg.Summary.StartUnixSecs,
 		HasUTC:          lg.Summary.HasUTC,
+		StartTimeMs:     lg.EarliestBodyTimeMs(),
 		Format:          lg.Summary.Format,
 	}
 }

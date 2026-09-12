@@ -434,9 +434,12 @@ export interface LogSummary {
   durationSecs?: number;
   frame?: string | number;
   airframe?: string;
-  /** 日志 UTC 基准（有则相对秒可换算绝对时刻；与 AI 工具 timeSec 同基准）。 */
+  /** 日志 UTC 基准（绝对时刻换算用）。 */
   hasUTC?: boolean;
   startUnixSecs?: number;
+  /** 工具相对秒 0 点的绝对毫秒原点（日志内最早 TypeBody 基准，含 FILE 等头部
+   * type），与曲线时间轴同量纲——AI 工具输出的秒映射回曲线轴的锚点。 */
+  startTimeMs?: number;
   [key: string]: unknown;
 }
 

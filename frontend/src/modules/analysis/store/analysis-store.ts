@@ -223,13 +223,15 @@ export const useAnalysisStore = defineStore('analysis', () => {
 
   /**
    * AI 问题时段相对秒 → 曲线轴绝对 ms 的锚点。
-   * 后端工具输出的秒 = (TypeBody.BaseTimeMs - 日志最早原点)/1000，即 0 点是
-   * "日志内最早 type 的 BaseTimeMs"（启动毫秒或 UTC 回基，与曲线轴同一量纲；
-   * 注意不是 summary.startUnixSecs 的 UTC epoch——量纲不同会全部错位）。
-   * 前端用已拉取 type body 原点的最小值近似（误差 = 最早 type 未被拉过的差，
-   * 通常亚秒级），没有任何 body 时退化用曲线基准。
+   * 后端工具输出的秒 = (TypeBody.BaseTimeMs - 日志最早原点 startMs)/1000，0 点是
+   * "日志内**最早** type 的 BaseTimeMs"——含 FILE 等头部 type（可能比飞行数据
+   * 早数百秒，模型报告的"t≈445s 起飞"正源于此），与曲线轴同一量纲。
+   * 优先用后端 summary.startTimeMs（= startMs，精确）；缺失时退化为已拉取
+   * type body 原点最小值（不含未拉取的头部 type，可能偏晚）。
    */
   function incidentAnchorMs(): number {
+    const sum = useLogStore().log.summary;
+    if (sum && Number.isFinite(sum.startTimeMs) && sum.startTimeMs > 0) return sum.startTimeMs;
     const cm = useCurveManagerStore();
     let min = Infinity;
     for (const name in cm.typeBodies) {

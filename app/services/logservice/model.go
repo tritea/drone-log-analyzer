@@ -29,7 +29,11 @@ type SummaryResponse struct {
 	TypeCount       int     `json:"typeCount"`
 	StartUnixSecs   int64   `json:"startUnixSecs"`
 	HasUTC          bool    `json:"hasUTC"`
-	Format          string  `json:"format"`
+	// StartTimeMs 是 Series 工具相对秒 0 点的绝对毫秒原点（= 日志内最早
+	// TypeBody.BaseTimeMs，含 FILE 等头部 type），与曲线时间轴同量纲——
+	// 前端把 AI 工具输出的秒映射回曲线轴时用它做锚点。
+	StartTimeMs float64 `json:"startTimeMs"`
+	Format      string  `json:"format"`
 }
 
 type TypeInfo struct {
