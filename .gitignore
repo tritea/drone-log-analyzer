@@ -7,3 +7,4 @@ build/bin/
 bin/
 .tmp/
 rsrc_windows_*.syso
+.claude/
