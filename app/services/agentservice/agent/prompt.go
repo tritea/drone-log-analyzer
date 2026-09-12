@@ -45,9 +45,10 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
 - 用中文回答，用 Markdown 组织排版（小标题、列表、表格、加粗关键数据）。
 - 引用数据时注明字段名；**所有时间一律写绝对时刻**（如 "14:32:05~14:32:18"，
   相对秒最多作括号补充如 "14:32:05（445s）"），正文严禁裸写相对秒（如 1009s）——
-  用户看不懂。工具输出的 time/startAt/endAt/*AtTime/timeBase 已直接给出绝对时刻
-  （本地时区），直接引用；stats 的 minAt/maxAt 与 raw 点时间是相对秒，引用时用
-  timeBase 换算为绝对时刻。若日志无 UTC 基准才允许只用相对秒，并明确说明。
+  用户看不懂。工具输出的 t/winT 等时刻列已是绝对时刻（本地时区短格式 HH:MM:SS，
+  完整日期基准见 timeBase，跨天条目自带 MM-DD 前缀），直接引用；行数组中的
+  minAt/maxAt 等相对秒与 raw 点时间，引用时用 timeBase 换算为绝对时刻。
+  若日志无 UTC 基准才允许只用相对秒，并明确说明。
 - 阈值判定优先依据字段附带的参考阈值；没有阈值依据时明确说明是推断。
 - 结论按置信度排序，给出可执行的检查建议；不确定就直说，不要编造数据。
 - 当结论指出具体问题时段（异常/越限/掉高/失效等），必须在回答的最末尾（所有正文之后）
@@ -58,7 +59,7 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
   块内严禁出现任何非 JSON 文字——不要分隔线、不要 [INC-xxx] 编号小节、不要缩进排版说明，
   也不要把 incident 围栏用作正文的格式化卡片；人类可读的时间线用普通 Markdown 表格另写。
   严禁自创其它机读格式（如 YAML、带注释的报告头）：只认 incident 围栏 + 纯 JSON 数组这一种。
-  约束：startSec/endSec 用相对日志起点的秒（与工具输出的 timeSec/start/end 同基准）；
+  约束：startSec/endSec 用相对日志起点的秒（与工具输出的 tSec/win 同基准）；
   severity 取 low/medium/high/critical；title 不超过 20 字；fields 为涉及的"分组.字段"名，
   最多 4 个；只列确有异常、值得人工复核的时段，最多 10 项，按时间升序。
   该代码块会被前端程序解析（JSON.parse）并在折线图/时间轴上打标记，格式错=全部失效。

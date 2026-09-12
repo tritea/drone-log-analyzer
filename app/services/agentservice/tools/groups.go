@@ -11,16 +11,12 @@ import (
 
 type listGroupsInput struct{}
 
-type groupBrief struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"` // 知识库描述；空=知识库未覆盖
-	Affects     []string `json:"affects,omitempty"`
-	SampleCount int      `json:"sampleCount"`
-	FieldCount  int      `json:"fieldCount"`
-}
+// groupCols：desc/affects 来自知识库（空=未覆盖）。
+var groupCols = []string{"name", "samples", "fields", "desc", "affects"}
 
 type listGroupsOutput struct {
-	Groups []groupBrief `json:"groups"`
+	Cols []string `json:"cols"`
+	Rows [][]any  `json:"rows"`
 }
 
 // listGroupsTool 列出当前日志实际存在的 group，左连接知识库描述。
@@ -28,28 +24,24 @@ type listGroupsOutput struct {
 // 这样 AI 不会漏掉可用数据。
 func listGroupsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("list_groups",
-		"列出当前日志里实际存在的数据分组（如 GPS/BAT/CTUN），"+
-			"含每个分组的用途说明、样本数与字段数。",
+		"列出当前日志里实际存在的数据分组（如 GPS/BAT/CTUN），行数组（cols 标列序）："+
+			"名称、样本数、字段数，及知识库的分组用途与影响说明（空=未覆盖）。",
 		func(ctx context.Context, _ listGroupsInput) (listGroupsOutput, error) {
 			types, err := deps.Log.MessageTypes(ctx)
 			if err != nil {
 				return listGroupsOutput{}, err
 			}
 			kb := knowledge.ForFormat(deps.Format)
-			groups := make([]groupBrief, 0, len(types))
+			out := listGroupsOutput{Cols: groupCols, Rows: make([][]any, 0, len(types))}
 			for _, ti := range types {
-				brief := groupBrief{
-					Name:        ti.Name,
-					SampleCount: ti.Count,
-					FieldCount:  len(ti.Fields),
-				}
+				desc, affects := "", any(nil)
 				if gm := knowledge.FilterGroup(kb.Group(ti.Name), deps.Class); gm != nil {
-					brief.Description = gm.Description
-					brief.Affects = gm.Affects
+					desc = gm.Description
+					affects = strsOrNil(gm.Affects)
 				}
-				groups = append(groups, brief)
+				out.Rows = append(out.Rows, trimRow([]any{ti.Name, ti.Count, len(ti.Fields), desc, affects}))
 			}
-			return listGroupsOutput{Groups: groups}, nil
+			return out, nil
 		})
 }
 
@@ -57,33 +49,25 @@ type groupFieldsInput struct {
 	Group string `json:"group" jsonschema:"required" jsonschema_description:"分组名，如 GPS、BAT、CTUN"`
 }
 
-type fieldBrief struct {
-	Name        string                  `json:"name"`
-	Description string                  `json:"description,omitempty"`
-	Unit        string                  `json:"unit,omitempty"`
-	Thresholds  []knowledge.Threshold   `json:"thresholds,omitempty"`
-	Affects     []string                `json:"affects,omitempty"`
-	Analysis    []knowledge.AnalysisNote `json:"analysis,omitempty"`
-	Related     []string                `json:"related,omitempty"`
-	Min         float64                 `json:"min,omitempty"`
-	Max         float64                 `json:"max,omitempty"`
-	Count       int                     `json:"count,omitempty"`
-	Known       bool                    `json:"known"` // 知识库是否覆盖该字段
-}
+// fieldCols：name/min/max/n=实测统计；知识库覆盖时附 desc/unit/
+// thr=[级别,op,阈值]行/affects/analysis=[条件,含义]行/related（行尾空列省略）。
+var fieldCols = []string{"name", "min", "max", "n", "desc", "unit", "thr", "affects", "analysis", "related"}
 
 type groupFieldsOutput struct {
-	Group       string       `json:"group"`
-	Description string       `json:"description,omitempty"`
-	VehicleNote string       `json:"vehicleNote,omitempty"`
-	Fields      []fieldBrief `json:"fields"`
+	Group       string   `json:"group"`
+	Description string   `json:"description,omitempty"`
+	VehicleNote string   `json:"vehicleNote,omitempty"`
+	Cols        []string `json:"cols"`
+	Rows        [][]any  `json:"rows"`
 }
 
 // groupFieldsTool 返回一个 group 的字段清单：知识库元信息（描述/单位/阈值/
 // 影响域/分析启发式）与实测统计（min/max/count）融合。
 func groupFieldsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_fields",
-		"获取某个分组内的字段清单：每个字段的含义、单位、参考阈值、影响范围、"+
-			"分析提示，以及实测最小/最大值与样本数（known 表示是否附有参考说明）。"+
+		"获取某个分组内的字段清单，行数组（cols 标列序，行尾空列省略）："+
+			"name/min/max/n=实测统计；知识库覆盖时附 desc/unit/thr=[级别,op,阈值]行/"+
+			"affects/analysis=[条件,含义]行/related（无附加列=知识库未覆盖）。"+
 			"按 分组.字段 取数（如 GPS.NSats）前先调它确认字段名。",
 		func(ctx context.Context, in groupFieldsInput) (groupFieldsOutput, error) {
 			fields, err := deps.Log.Fields(ctx, logservice.FieldsRequest{Type: in.Group})
@@ -92,7 +76,7 @@ func groupFieldsTool(deps Deps) (tool.InvokableTool, error) {
 			}
 			kb := knowledge.ForFormat(deps.Format)
 			gm := knowledge.FilterGroup(kb.Group(in.Group), deps.Class)
-			out := groupFieldsOutput{Group: in.Group, Fields: make([]fieldBrief, 0, len(fields))}
+			out := groupFieldsOutput{Group: in.Group, Cols: fieldCols, Rows: make([][]any, 0, len(fields))}
 			if gm != nil {
 				out.Description = gm.Description
 				if note, ok := gm.VehicleNotes[string(deps.Class)]; ok {
@@ -103,22 +87,13 @@ func groupFieldsTool(deps Deps) (tool.InvokableTool, error) {
 				if !fi.IsNumeric {
 					continue
 				}
-				brief := fieldBrief{
-					Name:  fi.Name,
-					Min:   fi.Min,
-					Max:   fi.Max,
-					Count: fi.Count,
-				}
+				row := []any{fi.Name, fi.Min, fi.Max, fi.Count}
 				if fm, ok := kb.Field(in.Group, fi.Name); ok && knowledge.Applies(fm.AppliesTo, deps.Class) {
-					brief.Known = true
-					brief.Description = fm.Description
-					brief.Unit = fm.Unit
-					brief.Thresholds = fm.Thresholds
-					brief.Affects = fm.Affects
-					brief.Analysis = fm.Analysis
-					brief.Related = fm.Related
+					row = append(row, fm.Description, fm.Unit,
+						thrRows(fm.Thresholds), strsOrNil(fm.Affects),
+						anaRows(fm.Analysis), strsOrNil(fm.Related))
 				}
-				out.Fields = append(out.Fields, brief)
+				out.Rows = append(out.Rows, trimRow(row))
 			}
 			return out, nil
 		})
