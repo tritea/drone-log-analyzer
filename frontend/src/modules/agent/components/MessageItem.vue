@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import type { ChatMessage } from '@/services/agent'
 import { useAgentStore } from '../store/agent-store'
 import { SEVERITY_META, parseIncidents, stripIncidentBlock } from '../utils/incidents'
@@ -11,6 +12,7 @@ import MarkdownView from './MarkdownView.vue'
 const props = defineProps<{ message: ChatMessage }>()
 
 const agentStore = useAgentStore()
+const { focusedIncidentId } = storeToRefs(agentStore)
 
 /** 机读 incident 块剥离后再渲染 Markdown；问题时段以可点击卡片呈现。 */
 const displaySource = computed(() =>
@@ -40,14 +42,16 @@ function fmtTok(n?: number): string {
       <MarkdownView v-if="message.role === 'assistant'" :source="displaySource" />
       <template v-else>{{ message.content }}</template>
       <span v-if="message.queued" class="queued-tag">排队中</span>
-      <!-- 问题时段卡片：点击定位（3D 跳转 + 主图缩放），供二次分析快速复核 -->
+      <!-- 问题时段卡片：点击定位（临时叠加相关字段曲线 + 3D 跳转 + 主图缩放），
+           再点同一张卡片取消聚焦并清掉临时曲线 -->
       <div v-if="incidents.length" class="msg-incidents">
         <button
           v-for="inc in incidents"
           :key="inc.id"
           class="incident-chip"
-          :style="{ borderColor: SEVERITY_META[inc.severity].color, color: SEVERITY_META[inc.severity].color }"
-          :title="`【${SEVERITY_META[inc.severity].label}】${inc.desc || inc.title}\n点击定位到该时段（3D 跳转 / 图表缩放）${inc.fields.length ? '\n字段：' + inc.fields.join(', ') : ''}`"
+          :class="{ 'is-focused': focusedIncidentId === inc.id }"
+          :style="{ '--inc': SEVERITY_META[inc.severity].color }"
+          :title="`【${SEVERITY_META[inc.severity].label}】${inc.desc || inc.title}\n点击定位到该时段（临时叠加相关曲线 + 3D 跳转 + 图表缩放）；再次点击取消${inc.fields.length ? '\n字段：' + inc.fields.join(', ') : ''}`"
           @click="agentStore.focusIncident(inc)"
         >
           <span class="incident-dot" :style="{ background: SEVERITY_META[inc.severity].color }"></span>
@@ -136,12 +140,19 @@ function fmtTok(n?: number): string {
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid;
+  border: 1px solid var(--inc);
+  color: var(--inc);
   background: var(--surface-strong, transparent);
   cursor: pointer;
   white-space: nowrap;
 }
 .incident-chip:hover { filter: brightness(0.92); }
+/* 聚焦态：实心填充，白字白点 */
+.incident-chip.is-focused {
+  background: var(--inc);
+  color: #fff;
+}
+.incident-chip.is-focused .incident-dot { background: #fff; }
 .incident-dot {
   width: 7px;
   height: 7px;

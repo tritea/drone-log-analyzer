@@ -468,8 +468,6 @@ export interface ChartState {
   showErrors: boolean;
   showEvents: boolean;
   showMessages: boolean;
-  /** AI 问题时段标记（主图警示带/标签、3D 时间轴警示条）总开关。 */
-  showAiMarks: boolean;
   lineWidth: number;
   activeField: ActiveFieldState;
 }

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { computed, reactive, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { agentClient, onAgentEvent } from '@/services/agent';
 import type { AgentEvent, ChatMessage, LlmConfig } from '@/services/agent';
 import { useLogStore } from '@/modules/log';
@@ -76,9 +76,18 @@ export const useAgentStore = defineStore('agent', () => {
     return out.sort((a, b) => a.startSec - b.startSec);
   });
 
-  // 问题时段变化（新分析完成/清空会话/切换日志）→ 刷新主图警示带与标记
-  watch(incidents, () => {
-    useAnalysisStore().rebuildChart();
+  /** 当前聚焦的问题时段 id（再点同一张卡片 = 取消聚焦；空 = 未聚焦）。 */
+  const focusedIncidentId = ref('');
+
+  // 问题时段变化（新分析完成/清空会话/切换日志）→ 刷新主图警示带与标记；
+  // 会话清空时同步清掉 AI 临时叠加曲线与聚焦态。
+  watch(incidents, (list) => {
+    const analysis = useAnalysisStore();
+    if (!list.length) {
+      focusedIncidentId.value = '';
+      analysis.clearAiOverlay();
+    }
+    analysis.rebuildChart();
   });
 
   /** 问题时段相对秒 → 绝对 ms（统一走 analysis 的 incident 锚点，与主图标记同一基准）。 */
@@ -87,15 +96,23 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   /**
-   * 定位问题时段（消息卡片/图表标记点击）：先自动加载该时段涉及的字段曲线
-   *（未在图中的按需拉取），再 3D 播放跳到时段起点、主图缩放到该窗口。
-   * 窗口与当前曲线数据无交集时 toast 说明（不再"点了没反应"）。
+   * 定位问题时段（消息卡片/图表标记点击）：把该时段涉及的字段加载为**临时叠加
+   * 曲线**（与用户曲线分开、不持久化，整体替换上一次叠加），3D 播放跳到时段
+   * 起点、主图缩放到该窗口。**再次点击同一张卡片 = 取消聚焦**：清临时曲线并
+   * 恢复全量视口。窗口与当前曲线数据无交集时 toast 说明（不再"点了没反应"）。
    */
   async function focusIncident(inc: Incident): Promise<void> {
     if (!inc) return;
     const analysis = useAnalysisStore();
+    if (focusedIncidentId.value === inc.id) {
+      focusedIncidentId.value = '';
+      analysis.clearAiOverlay();
+      analysis.resetZoom();
+      return;
+    }
+    focusedIncidentId.value = inc.id;
     if (inc.fields.length) {
-      await analysis.loadIncidentFields(inc.fields);
+      await analysis.loadIncidentOverlay(inc.fields);
     }
     useScene3dStore().seekThreeToTime(incidentAbsMs(inc.startSec));
     const focused = analysis.focusChartWindow(incidentAbsMs(inc.startSec), incidentAbsMs(inc.endSec));
@@ -273,6 +290,7 @@ export const useAgentStore = defineStore('agent', () => {
     agent,
     llmConfigured,
     incidents,
+    focusedIncidentId,
     focusIncident,
     initialize,
     dispose,

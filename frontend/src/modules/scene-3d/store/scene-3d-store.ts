@@ -265,7 +265,6 @@ export const useScene3dStore = defineStore('scene-3d', () => {
     var incidents = useAgentStore().incidents;
     var r = threePlaybackRange.value;
     if (!incidents.length || !r.span) return [];
-    if (!useAnalysisStore().chart.showAiMarks) return [];
     var base = useAnalysisStore().incidentAnchorMs();
     var out: { startPct: number; widthPct: number; color: string }[] = [];
     for (var inc of incidents) {

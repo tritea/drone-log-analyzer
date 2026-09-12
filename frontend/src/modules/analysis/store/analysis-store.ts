@@ -86,16 +86,18 @@ export const useAnalysisStore = defineStore('analysis', () => {
     showErrors: true,
     showEvents: true,
     showMessages: false,
-    showAiMarks: true,
     lineWidth: 3,
     activeField: { name: '', selectedSimpleName: '', expanded: {}, groupParams: {} },
   });
   const curveState = ref<CurveSaveState>({ loading: false, restoring: false, saveTimer: null });
   /** 运行时绘制开关（不持久化）：curveId → 是否绘制；缺省视为 true。 */
   const curveDrawn = ref<Record<string, boolean>>({});
-  /** AI 定位问题时段时自动加载的曲线（id + 字段名，会话级不持久化）：
-   * 供「AI曲线」一键开关批量移除/恢复，避免赖在图上关不掉。 */
-  const aiCurves = ref<Array<{ id: string; name: string }>>([]);
+  /**
+   * AI 定位问题时段时临时叠加的曲线：与用户曲线（activeCurves，持久化、进图例）
+   * 彻底分开——只在渲染层合并（绘制/量程/hover），不进 activeCurves、不持久化、
+   * 不进图例；点击问题卡片时整体替换，再次点击取消，清空会话/切换日志即消失。
+   */
+  const aiOverlay = ref<Curve[]>([]);
 
   // ═══════════════════════ 2. 字段组参数（纯数据读写）═══════════════════════
   function makeFieldGroupParams(source?: GroupParamSource): FieldGroupParams {
@@ -153,10 +155,15 @@ export const useAnalysisStore = defineStore('analysis', () => {
     return own * group.scale + group.offset;
   }
 
+  /** 渲染用的合并曲线集：用户曲线 + AI 临时叠加（仅渲染层合并，不改 activeCurves）。 */
+  function renderedCurves(): Curve[] {
+    return aiOverlay.value.length ? [...chart.value.activeCurves, ...aiOverlay.value] : chart.value.activeCurves;
+  }
+
   function calcYRange(): ValueRange {
     let gMin = Infinity;
     let gMax = -Infinity;
-    for (const c of chart.value.activeCurves) {
+    for (const c of renderedCurves()) {
       if (!c.visible || !c.count) continue;
       let lo = transformValue(c.min, c);
       let hi = transformValue(c.max, c);
@@ -173,7 +180,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
   function calcXRange(): ValueRange {
     let gMin = Infinity;
     let gMax = -Infinity;
-    for (const c of chart.value.activeCurves) {
+    for (const c of renderedCurves()) {
       if (!c.visible || !c.buffer || !c.buffer.length || c.baseTimeMs === undefined) continue;
       let first = c.baseTimeMs + c.buffer[0];
       let last = c.baseTimeMs + c.buffer[c.buffer.length - 2];
@@ -211,7 +218,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
   // ═══════════════════════ 4. 系列与标注 ═══════════════════════
   function buildLineSeries(baseTimeMs: number): LineSeries[] {
     const out: LineSeries[] = [];
-    for (const c of chart.value.activeCurves) {
+    for (const c of renderedCurves()) {
       if (!c.visible || !c.buffer || !c.buffer.length) continue;
       const group = ensureFieldGroupParams(c.fieldName);
       const scaleY = c.scale * group.scale;
@@ -264,7 +271,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
 
     // AI 问题时段：按严重度铺半透明警示带 + 第二行标题文字（第一行是飞行模式名，错开 22px）
     const incidents = useAgentStore().incidents;
-    if (chart.value.showAiMarks && incidents.length) {
+    if (incidents.length) {
       const base = incidentAnchorMs();
       for (const inc of incidents) {
         const s = base + inc.startSec * 1000;
@@ -331,7 +338,6 @@ export const useAnalysisStore = defineStore('analysis', () => {
     const incidents = useAgentStore().incidents;
     let aiCount = 0;
     for (const inc of incidents) {
-      if (!chart.value.showAiMarks) break;
       if (aiCount >= MARK_LINE_CAP) break;
       const t = incidentAnchorMs() + inc.startSec * 1000;
       if (t < xmin || t > xmax) continue;
@@ -392,7 +398,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     const mode = findModeAtTime(targetTime);
     const rows: string[] = [];
 
-    for (const curve of chart.value.activeCurves) {
+    for (const curve of renderedCurves()) {
       if (!curve.visible) continue;
       const bin = cm.peek(curve.type, curve.field);
       if (!bin) continue;
@@ -681,41 +687,39 @@ export const useAnalysisStore = defineStore('analysis', () => {
    * 模型生成的，可能写错——失败静默跳过不弹错）。已在图中的直接视为成功。
    * 返回成功在图中的字段名；供点击问题卡片后"曲线自动加载相关异常字段"。
    */
-  async function loadIncidentFields(fieldNames: string[]): Promise<string[]> {
-    const loaded: string[] = [];
-    if (!fieldNames.length) return loaded;
-    const logStore = useLogStore();
-    logStore.log.loading = true;
-    try {
-      let added = false;
-      for (const name of fieldNames) {
-        const dot = name.indexOf('.');
-        if (dot <= 0 || dot >= name.length - 1) continue;
-        const type = name.slice(0, dot);
-        const field = name.slice(dot + 1);
-        if (isFieldActive(type, field)) {
-          loaded.push(name);
-          continue;
-        }
-        try {
-          const binary = await ensureCurveBinary(type, field);
-          chart.value.activeCurves.push(buildCurve(type, field, binary));
-          loaded.push(name);
-          added = true;
-          const id = curveKey(type, field);
-          if (!aiCurves.value.some((c) => c.id === id)) aiCurves.value.push({ id, name });
-        } catch {
-          // 字段不存在（名字写错/该格式无此字段）：跳过
-        }
+  /**
+   * AI 问题时段联动：把 incident 引用的字段加载为**临时叠加曲线**（整体替换
+   * 上一次的叠加）。与用户曲线彻底分开：不进 activeCurves、不持久化、不进
+   * 图例；用户图上已有的字段不重复叠加。字段名是模型生成的，可能写错——
+   * 失败静默跳过不弹错。
+   */
+  async function loadIncidentOverlay(fieldNames: string[]): Promise<void> {
+    const overlay: Curve[] = [];
+    for (const name of fieldNames) {
+      const dot = name.indexOf('.');
+      if (dot <= 0 || dot >= name.length - 1) continue;
+      const type = name.slice(0, dot);
+      const field = name.slice(dot + 1);
+      if (isFieldActive(type, field)) continue; // 用户图上已有：不重复叠加
+      try {
+        const binary = await ensureCurveBinary(type, field);
+        overlay.push(buildCurve(type, field, binary));
+      } catch {
+        // 字段不存在（名字写错/该格式无此字段）：跳过
       }
-      if (added) {
-        rebuildChart();
-        scheduleCurveStateSave();
-      }
-    } finally {
-      logStore.log.loading = false;
     }
-    return loaded;
+    const changed =
+      overlay.length !== aiOverlay.value.length ||
+      overlay.some((c, i) => c.id !== aiOverlay.value[i]?.id);
+    aiOverlay.value = overlay;
+    if (changed) rebuildChart();
+  }
+
+  /** 清除 AI 临时叠加曲线（取消聚焦/清空会话/切换日志时）。 */
+  function clearAiOverlay(): void {
+    if (!aiOverlay.value.length) return;
+    aiOverlay.value = [];
+    rebuildChart();
   }
 
   function removeCurve(idx: number): void {
@@ -738,34 +742,6 @@ export const useAnalysisStore = defineStore('analysis', () => {
   function removeCurveById(id: string): void {
     const idx = chart.value.activeCurves.findIndex((c) => c.id === id);
     if (idx >= 0) removeCurve(idx);
-  }
-
-  /** AI 加载的曲线是否还在图上（「AI曲线」开关的勾选态）。 */
-  const aiCurvesActive = computed<boolean>(() =>
-    aiCurves.value.some((c) => chart.value.activeCurves.some((a) => a.id === c.id)),
-  );
-
-  /**
-   * 「AI曲线」一键开关：图上有 AI 自动加载的曲线 → 全部移除（还原图表）；
-   * 已移除 → 按记录的字段名重新加载。用户手动删过的条目静默跳过。
-   */
-  async function toggleAiCurves(): Promise<void> {
-    if (aiCurvesActive.value) {
-      for (const c of aiCurves.value) removeCurveById(c.id);
-      const removed = aiCurves.value.length;
-      showToast(`已移除 ${removed} 条 AI 定位加载的曲线`, 'success');
-      return;
-    }
-    const names = aiCurves.value.map((c) => c.name);
-    if (!names.length) {
-      showToast('还没有 AI 加载的曲线（点击问题时段卡片后自动加载）', 'info');
-      return;
-    }
-    const loaded = await loadIncidentFields(names);
-    showToast(
-      loaded.length ? `已恢复 ${loaded.length} 条 AI 曲线` : 'AI 曲线字段已不可用',
-      loaded.length ? 'success' : 'info',
-    );
   }
 
   function clearAll(): void {
@@ -1092,9 +1068,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
     getFieldColor,
     toggleField,
     addCurve,
-    loadIncidentFields,
-    aiCurvesActive,
-    toggleAiCurves,
+    loadIncidentOverlay,
+    clearAiOverlay,
     removeCurve,
     removeCurveById,
     clearAll,
