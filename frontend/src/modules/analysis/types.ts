@@ -15,7 +15,14 @@ export type ValueRange = { min: number; max: number };
 export type Viewport = { xMin: number; xMax: number; yMin: number; yMax: number };
 export type GridMargin = { left: number; right: number; top: number; bottom: number };
 
-export type MarkArea = { startT: number; endT: number; color: string; label?: string };
+export type MarkArea = {
+  startT: number;
+  endT: number;
+  color: string;
+  label?: string;
+  /** label 距绘图区顶部的偏移（px，缺省 6）；第二行标注（如 AI 问题标题）用更大值错开。 */
+  labelTop?: number;
+};
 export type MarkLine = {
   t: number;
   row: number;

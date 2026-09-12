@@ -85,11 +85,20 @@ export const useAgentStore = defineStore('agent', () => {
     return useAnalysisStore().chartBaseTimeMs() + sec * 1000;
   }
 
-  /** 定位问题时段：3D 播放跳到时段起点，主图缩放到该窗口（供消息卡片/图表标记点击）。 */
-  function focusIncident(inc: Incident): void {
+  /**
+   * 定位问题时段（消息卡片/图表标记点击）：先自动加载该时段涉及的字段曲线
+   *（未在图中的按需拉取），再 3D 播放跳到时段起点、主图缩放到该窗口。
+   * 曲线加载放在最前——若此前图上没有曲线，日志起点（时间锚点）要等曲线
+   * 加载后才可用，锚定/缩放必须在加载之后计算。
+   */
+  async function focusIncident(inc: Incident): Promise<void> {
     if (!inc) return;
+    const analysis = useAnalysisStore();
+    if (inc.fields.length) {
+      await analysis.loadIncidentFields(inc.fields);
+    }
     useScene3dStore().seekThreeToTime(incidentAbsMs(inc.startSec));
-    useAnalysisStore().focusChartWindow(incidentAbsMs(inc.startSec), incidentAbsMs(inc.endSec));
+    analysis.focusChartWindow(incidentAbsMs(inc.startSec), incidentAbsMs(inc.endSec));
   }
 
   let unsubEvents: (() => void) | null = null;

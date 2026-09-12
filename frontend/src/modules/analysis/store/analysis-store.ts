@@ -246,7 +246,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
       }
     }
 
-    // AI 问题时段：按严重度铺半透明警示带（不带文字，标题走 MarkLine 标签，避免与模式名挤在顶部）
+    // AI 问题时段：按严重度铺半透明警示带 + 第二行标题文字（第一行是飞行模式名，错开 22px）
     const incidents = useAgentStore().incidents;
     if (incidents.length) {
       const base = chartBaseTimeMs();
@@ -258,6 +258,8 @@ export const useAnalysisStore = defineStore('analysis', () => {
             startT: Math.max(s, xRange.min),
             endT: Math.min(e, xRange.max),
             color: SEVERITY_META[inc.severity].band,
+            label: '⚠ ' + inc.title,
+            labelTop: 22,
           });
         }
       }
@@ -657,6 +659,46 @@ export const useAnalysisStore = defineStore('analysis', () => {
     }
   }
 
+  /**
+   * AI 问题时段联动：批量加载 incident 引用的字段曲线（"分组.字段" 名，
+   * 模型生成的，可能写错——失败静默跳过不弹错）。已在图中的直接视为成功。
+   * 返回成功在图中的字段名；供点击问题卡片后"曲线自动加载相关异常字段"。
+   */
+  async function loadIncidentFields(fieldNames: string[]): Promise<string[]> {
+    const loaded: string[] = [];
+    if (!fieldNames.length) return loaded;
+    const logStore = useLogStore();
+    logStore.log.loading = true;
+    try {
+      let added = false;
+      for (const name of fieldNames) {
+        const dot = name.indexOf('.');
+        if (dot <= 0 || dot >= name.length - 1) continue;
+        const type = name.slice(0, dot);
+        const field = name.slice(dot + 1);
+        if (isFieldActive(type, field)) {
+          loaded.push(name);
+          continue;
+        }
+        try {
+          const binary = await ensureCurveBinary(type, field);
+          chart.value.activeCurves.push(buildCurve(type, field, binary));
+          loaded.push(name);
+          added = true;
+        } catch {
+          // 字段不存在（名字写错/该格式无此字段）：跳过
+        }
+      }
+      if (added) {
+        rebuildChart();
+        scheduleCurveStateSave();
+      }
+    } finally {
+      logStore.log.loading = false;
+    }
+    return loaded;
+  }
+
   function removeCurve(idx: number): void {
     const removed = chart.value.activeCurves[idx];
     chart.value.activeCurves.splice(idx, 1);
@@ -1001,6 +1043,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     getFieldColor,
     toggleField,
     addCurve,
+    loadIncidentFields,
     removeCurve,
     removeCurveById,
     clearAll,
