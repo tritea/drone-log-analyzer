@@ -36,7 +36,8 @@ const incidentPatchPrompt = "请把上面结论中的问题时段（异常/越�
 	"只输出一个围栏代码块（开始标记=三个反引号紧跟 incident），块内容为纯 JSON 数组（以 [ 开始、] 结束，" +
 	"块内不得有任何其它文字），每项形如 {\"startSec\": 数值, \"endSec\": 数值, " +
 	"\"severity\": \"low|medium|high|critical\", \"title\": \"简短标题\", \"desc\": \"一句话结论\", " +
-	"\"fields\": [\"GRP.Field\"]}。startSec/endSec 为相对日志起点的秒。没有问题时段则只回复两个字：无"
+	"\"fields\": [\"GRP.Field\"]}。startSec/endSec 为相对日志起点的秒。" +
+	"严禁 YAML 或任何自创格式，只认 JSON 数组。没有问题时段则只回复两个字：无"
 
 // incidentPatch 跑一轮无工具的格式转换：基于已含本轮结论的会话历史，让
 // 模型只做"结论→JSON"的转换（不查数据，token 开销小）。返回补块文本

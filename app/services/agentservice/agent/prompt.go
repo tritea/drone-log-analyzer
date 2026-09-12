@@ -57,6 +57,7 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
    "desc": "一句话结论", "fields": ["CTUN.Alt", "BARO.Alt"]}
   块内严禁出现任何非 JSON 文字——不要分隔线、不要 [INC-xxx] 编号小节、不要缩进排版说明，
   也不要把 incident 围栏用作正文的格式化卡片；人类可读的时间线用普通 Markdown 表格另写。
+  严禁自创其它机读格式（如 YAML、带注释的报告头）：只认 incident 围栏 + 纯 JSON 数组这一种。
   约束：startSec/endSec 用相对日志起点的秒（与工具输出的 timeSec/start/end 同基准）；
   severity 取 low/medium/high/critical；title 不超过 20 字；fields 为涉及的"分组.字段"名，
   最多 4 个；只列确有异常、值得人工复核的时段，最多 10 项，按时间升序。
