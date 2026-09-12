@@ -19,13 +19,15 @@ import (
 	"drone-log-analyzer/app/services/logservice"
 )
 
-// roundStats 汇总一轮的耗时与 token 用量（usage 缺失时仅时长）。
+// roundStats 汇总一轮（用户输入→最终输出）的耗时与 token 用量：token 为
+// 本轮全部模型调用（ReAct 各次迭代 + 补块）的累计，与服务商计费口径
+// 一致；usage 全缺时仅时长。
 func roundStats(r *run, started time.Time) *agentservice.RoundStats {
 	st := &agentservice.RoundStats{DurationMs: time.Since(started).Milliseconds()}
-	if r.usage != nil {
-		st.PromptTokens = r.usage.PromptTokens
-		st.CompletionTokens = r.usage.CompletionTokens
-		st.TotalTokens = r.usage.TotalTokens
+	if r.sumTotal > 0 {
+		st.PromptTokens = r.sumPrompt
+		st.CompletionTokens = r.sumCompletion
+		st.TotalTokens = r.sumTotal
 	}
 	return st
 }
@@ -183,18 +185,6 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 		Role:      "assistant",
 		Content:   answer,
 		ToolTrace: r.trace(),
-		Stats:     roundStats(r, started),
-	}
-	// stats 挂进历史消息（Extra），History() 可带出。
-	for i := len(r.msgs) - 1; i >= 0; i-- {
-		m := r.msgs[i]
-		if m.Role == schema.Assistant && len(m.ToolCalls) == 0 {
-			if m.Extra == nil {
-				m.Extra = map[string]any{}
-			}
-			m.Extra["stats"] = final.Stats
-			break
-		}
 	}
 	// 历史回填：user + 本轮完整交错序列（assistant/tool 保留 ToolCalls 供
 	// 下一轮上下文）。被停止的半轮也保留已生成部分。随后落盘（重开可恢复）。
@@ -205,8 +195,11 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 
 	// 缺合法 incident 机读块时静默补一轮（模型偶尔漏输出或写成排版文本）：
 	// 用无工具的轻量 agent 把已有结论转成纯 JSON，拼到回答末尾并同步历史。
+	// 补块的消耗（无论是否产出块）也计入本轮统计。
 	if len(answer) > 200 && !looksLikeIncidentJSON(answer) {
-		if patch := s.incidentPatch(runCtx, cfg, sess); patch != "" {
+		pr, patch := s.incidentPatch(runCtx, cfg, sess)
+		r.addUsage(pr)
+		if patch != "" {
 			answer += "\n\n" + patch
 			final.Content = answer
 			for i := len(round) - 1; i >= 0; i-- {
@@ -215,6 +208,20 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 					break
 				}
 			}
+		}
+	}
+
+	// stats 覆盖整轮（输入→输出，含补块），定稿后挂进历史消息（Extra），
+	// History() 可带出。
+	final.Stats = roundStats(r, started)
+	for i := len(r.msgs) - 1; i >= 0; i-- {
+		m := r.msgs[i]
+		if m.Role == schema.Assistant && len(m.ToolCalls) == 0 {
+			if m.Extra == nil {
+				m.Extra = map[string]any{}
+			}
+			m.Extra["stats"] = final.Stats
+			break
 		}
 	}
 	sess.save()
