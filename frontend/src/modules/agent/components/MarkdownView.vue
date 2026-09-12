@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { agentMd } from '../utils/markdown'
 
-/** 助手回复的 Markdown 渲染：marked 解析 + DOMPurify 消毒（模型输出不可信，防 XSS）。 */
+/** 助手回复的 Markdown 渲染：agentMd 解析（GFM，删除线还原，见 utils/markdown）
+ * + DOMPurify 消毒（模型输出不可信，防 XSS）。 */
 const props = defineProps<{ source: string }>()
 
-marked.setOptions({ gfm: true, breaks: true })
-
 const html = computed<string>(() => {
-  const raw = marked.parse(props.source ?? '', { async: false }) as string
+  const raw = agentMd.parse(props.source ?? '', { async: false }) as string
   return DOMPurify.sanitize(raw)
 })
 </script>
