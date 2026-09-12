@@ -74,7 +74,7 @@ func missionTool(deps Deps) (tool.InvokableTool, error) {
 			for _, c := range sorted {
 				if cur == nil || c.Sequence <= prevSeq {
 					out.Items = append(out.Items, missionVersion{
-						TSec:      c.TimeMs / 1000,
+						TSec:      relSec(deps.OriginMs, c.TimeMs),
 						Waypoints: make([][]any, 0, 16),
 					})
 					cur = &out.Items[len(out.Items)-1]
@@ -150,7 +150,7 @@ func mavlinkCommandsTool(deps Deps) (tool.InvokableTool, error) {
 					out.Truncated = true
 					continue
 				}
-				sec := c.TimeMs / 1000
+				sec := relSec(deps.OriginMs, c.TimeMs)
 				out.Rows = append(out.Rows, trimRow([]any{
 					deps.Abs.AtShort(sec), sec, nameOrID(c.CommandName, c.Command),
 					mavlinkVia(c.WasCommandLong), endpoint(c.SourceSystem, c.SourceComponent), endpoint(c.TargetSystem, c.TargetComponent),

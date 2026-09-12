@@ -15,10 +15,11 @@ import (
 
 // Deps 是工具集的依赖快照：绑定当前日志的访问入口与知识库上下文。
 type Deps struct {
-	Log    logservice.Service
-	Format string                 // 当前日志格式（apm/tlog/ulog）
-	Class  knowledge.VehicleClass // 当前机型类（知识库过滤）
-	Abs    *AbsTime               // 绝对时间基准（nil=日志无 UTC 基准）
+	Log      logservice.Service
+	Format   string                 // 当前日志格式（apm/tlog/ulog）
+	Class    knowledge.VehicleClass // 当前机型类（知识库过滤）
+	Abs      *AbsTime               // 绝对时间基准（nil=日志无 UTC 基准）
+	OriginMs float64                // 时间原点（毫秒）= summary.StartTimeMs：tlog/ulog 的记录时间戳是绝对纪元毫秒、dataflash 是启动毫秒，统一减它得相对毫秒（与 Series/曲线轴同量纲）
 }
 
 // Build 构建全部工具。任何单个工具构建失败都直接返回错误（schema 推导

@@ -41,6 +41,15 @@ func (a *AbsTime) AtShort(sec float64) string {
 	return t.Format("01-02 15:04:05")
 }
 
+// relSec 把记录时间戳换算为相对日志起点的秒：logservice 的记录类时间戳
+// （事件/错误/模式/航线/命令）随格式而异——tlog/ulog 是绝对纪元毫秒、
+// dataflash 是启动毫秒——统一减 OriginMs（= summary.StartTimeMs，与
+// Series/曲线轴同原点）后除 1000。不归一化的话 tlog/ulog 的事件时刻
+// 会被 AtShort 二次加基准，得到几十年后的幻影日期。
+func relSec(originMs, timeMs float64) float64 {
+	return (timeMs - originMs) / 1000
+}
+
 // 结果条目上限：工具输出直接进 LLM 上下文，超出即截断并标记 truncated，
 // 提示模型用更精确的过滤条件（时间窗/前缀）分批取。
 const (
