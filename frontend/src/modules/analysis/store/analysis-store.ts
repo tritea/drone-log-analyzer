@@ -167,10 +167,16 @@ export const useAnalysisStore = defineStore('analysis', () => {
     return extra.length ? [...chart.value.activeCurves, ...extra] : chart.value.activeCurves;
   }
 
+  /** 用户曲线为空时视口退化 {0,1}，AI 独立通道的曲线将永远不可见——
+   * 空图时由 AI 叠加曲线撑起 X/Y 范围。 */
+  function curveSource(): Curve[] {
+    return chart.value.activeCurves.length ? chart.value.activeCurves : aiOverlay.value;
+  }
+
   function calcYRange(): ValueRange {
     let gMin = Infinity;
     let gMax = -Infinity;
-    for (const c of chart.value.activeCurves) {
+    for (const c of curveSource()) {
       if (!c.visible || !c.count) continue;
       let lo = transformValue(c.min, c);
       let hi = transformValue(c.max, c);
@@ -188,7 +194,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
   function calcXRange(): ValueRange {
     let gMin = Infinity;
     let gMax = -Infinity;
-    for (const c of chart.value.activeCurves) {
+    for (const c of curveSource()) {
       if (!c.visible || !c.buffer || !c.buffer.length || c.baseTimeMs === undefined) continue;
       let first = c.baseTimeMs + c.buffer[0];
       let last = c.baseTimeMs + c.buffer[c.buffer.length - 2];
@@ -209,7 +215,10 @@ export const useAnalysisStore = defineStore('analysis', () => {
 
   function chartBaseTimeMs(): number {
     const base = chart.value.activeCurves.find((c) => c.visible && c.buffer && c.baseTimeMs !== undefined);
-    return base && base.baseTimeMs !== undefined ? base.baseTimeMs : 0;
+    if (base && base.baseTimeMs !== undefined) return base.baseTimeMs;
+    // 用户曲线为空时退用 AI 叠加曲线的时间基准（独立通道也要有原点可依）
+    const ai = aiOverlay.value.find((c) => c.buffer && c.baseTimeMs !== undefined);
+    return ai && ai.baseTimeMs !== undefined ? ai.baseTimeMs : 0;
   }
 
   /**
@@ -467,21 +476,25 @@ export const useAnalysisStore = defineStore('analysis', () => {
   }
 
   /**
-   * AI 临时叠加 → 独立绘制系列：归一化映射到主图 Y 范围的**上半区**
-   *（形状保真、不扰动用户曲线量程/视口），与用户曲线不同 id（ai- 前缀），
+   * AI 临时叠加 → 独立绘制系列：有用户曲线时归一化映射到主图 Y 范围的**上半区**
+   *（形状保真、不扰动用户量程/视口）；图上没有用户曲线时由 AI 曲线撑起量程
+   * 并映射到全幅（否则视口退化 {0,1}，AI 曲线永远不可见）。id 加 ai- 前缀，
    * 走 LineChart 的独立叠加通道 setAiSeries。
    */
   function buildAiSeries(baseTimeMs: number): LineSeries[] {
     if (!aiOverlay.value.length) return [];
     const ids = new Set(chart.value.activeCurves.map((c) => c.id));
+    const empty = chart.value.activeCurves.length === 0;
     const yRange = calcYRange();
     const span = yRange.max - yRange.min || 1;
+    const bandRatio = empty ? 0.96 : 0.45; // 空图全幅；有用户曲线时上半区带
+    const bandBase = empty ? yRange.min + span * 0.02 : yRange.min + span * 0.5;
     const out: LineSeries[] = [];
     for (const c of aiOverlay.value) {
       if (ids.has(c.id) || !c.buffer || !c.buffer.length) continue; // 用户已有同字段：不重复叠
       const cSpan = c.max - c.min;
-      const scale = cSpan > 0 ? (span * 0.45) / cSpan : 1; // 占上半 ~45% 区带
-      const offsetY = yRange.min + span * 0.5 - c.min * scale; // 区带底 ≈ 半高
+      const scale = cSpan > 0 ? (span * bandRatio) / cSpan : 1;
+      const offsetY = bandBase - c.min * scale;
       out.push({
         id: 'ai-' + c.id,
         color: c.color,
