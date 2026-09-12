@@ -33,3 +33,32 @@ func TestAtShort(t *testing.T) {
 		t.Errorf("nil AbsTime: Start = %q, want empty", got)
 	}
 }
+
+// TestRelSec 锁住时间域归一化：tlog/ulog 的记录时间戳是绝对纪元毫秒
+// （≈1.79e12），不减 OriginMs 会被 AtShort 二次加基准，渲染出几十年后
+// 的幻影日期（曾表现为事件 t 列 "05-16 21:xx"，实为 2083 年）。
+func TestRelSec(t *testing.T) {
+	const tlogStartMs = 1788912000000 // 2026-09-08 06:40:00 UTC
+	cases := []struct {
+		name     string
+		originMs float64
+		timeMs   float64
+		want     float64
+	}{
+		{"tlog 绝对毫秒", tlogStartMs, tlogStartMs + 445216, 445.216},
+		{"dataflash 启动毫秒", 4, 4 + 445220, 445.22},
+		{"原点自身", tlogStartMs, tlogStartMs, 0},
+	}
+	for _, c := range cases {
+		if got := relSec(c.originMs, c.timeMs); got != c.want {
+			t.Errorf("%s: relSec = %v, want %v", c.name, got, c.want)
+		}
+	}
+
+	// 端到端：tlog 域的相对秒渲染回正确当天时刻，而非跨天幻影日期。
+	base := time.Date(2026, 9, 8, 14, 40, 0, 0, time.Local)
+	abs := &AbsTime{StartUnix: base.Unix()}
+	if got := abs.AtShort(relSec(float64(base.UnixMilli()), float64(base.UnixMilli())+445216)); got != "14:47:25" {
+		t.Errorf("AtShort(relSec) = %q, want 14:47:25（14:40:00+445.216s）", got)
+	}
+}

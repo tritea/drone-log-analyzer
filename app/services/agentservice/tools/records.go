@@ -48,7 +48,7 @@ func flightEventsTool(deps Deps) (tool.InvokableTool, error) {
 					if e.SubsysName != "" {
 						desc = e.SubsysName + ": " + desc
 					}
-					sec := e.TimeMs / 1000
+					sec := relSec(deps.OriginMs, e.TimeMs)
 					out.Rows = append(out.Rows, []any{deps.Abs.AtShort(sec), sec, desc})
 				}
 			case "events":
@@ -61,7 +61,7 @@ func flightEventsTool(deps Deps) (tool.InvokableTool, error) {
 					if name == "" {
 						name = "EV#" + formatFloat(float64(ev.Id))
 					}
-					sec := ev.TimeMs / 1000
+					sec := relSec(deps.OriginMs, ev.TimeMs)
 					out.Rows = append(out.Rows, []any{deps.Abs.AtShort(sec), sec, name})
 				}
 			case "modes":
@@ -74,7 +74,7 @@ func flightEventsTool(deps Deps) (tool.InvokableTool, error) {
 					if text == "" {
 						text = "MODE#" + formatFloat(float64(m.ModeNum))
 					}
-					sec := m.TimeMs / 1000
+					sec := relSec(deps.OriginMs, m.TimeMs)
 					out.Rows = append(out.Rows, []any{deps.Abs.AtShort(sec), sec, text})
 				}
 			default:

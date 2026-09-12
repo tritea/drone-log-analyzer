@@ -106,7 +106,10 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 	if sum.HasUTC {
 		abs = &tools.AbsTime{StartUnix: sum.StartUnixSecs}
 	}
-	built, err := tools.Build(tools.Deps{Log: s.deps.Log, Format: sum.Format, Class: class, Abs: abs})
+	built, err := tools.Build(tools.Deps{
+		Log: s.deps.Log, Format: sum.Format, Class: class, Abs: abs,
+		OriginMs: sum.StartTimeMs,
+	})
 	if err != nil {
 		return nil, err
 	}
