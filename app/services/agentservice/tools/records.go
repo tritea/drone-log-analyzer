@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -91,6 +92,7 @@ func flightEventsTool(deps Deps) (tool.InvokableTool, error) {
 type parametersInput struct {
 	Topic      string `json:"topic,omitempty" jsonschema_description:"按问题域取支配参数（position/attitude/altitude/power/battery/vibration/estimator/rc；个别域无清单会报错并列出可选项），与 name_prefix 二选一"`
 	NamePrefix string `json:"name_prefix,omitempty" jsonschema_description:"参数名前缀过滤（区分大小写），缺省返回全部"`
+	NameSearch string `json:"name_search,omitempty" jsonschema_description:"按名字子串全局搜索（忽略大小写，如 RNGFND、BARO），可与 name_prefix 叠加——索引查不到时的暴力搜索兜底"`
 }
 
 // paramCols：name/value 必有（value=null=日志未记录该参数，通常=默认值，
@@ -112,6 +114,7 @@ type paramMatch struct {
 type parametersOutput struct {
 	Count     int      `json:"count"` // 命中总数（rows 可能被截断）
 	Truncated bool     `json:"truncated,omitempty"`
+	Hint      string   `json:"hint,omitempty"` // topic 路径链上参数缺失时的回退提示
 	Cols      []string `json:"cols"`
 	Rows      [][]any  `json:"rows"`
 }
@@ -142,14 +145,33 @@ func (e *paramTopicError) Error() string {
 		"）；请改用 name_prefix 前缀过滤"
 }
 
+// topicHint 在 topic 路径链上参数部分缺失时给出回退提示：个别缺失通常=
+// 保持默认；大量缺失往往是固件参数体系不同（EK2/EK3、参数改名），应改用
+// 前缀过滤拉原始参数自行分析——映射表是快路径，不允许它卡住探索。
+func topicHint(matches []paramMatch) string {
+	missing := 0
+	for _, m := range matches {
+		if !m.inLog {
+			missing++
+		}
+	}
+	if missing == 0 {
+		return ""
+	}
+	return fmt.Sprintf("链上 %d/%d 项日志未记录：通常=保持默认值；若该固件参数体系不同"+
+		"（参数改名/演进），改用 name_search/name_prefix 拉原始参数自行分析", missing, len(matches))
+}
+
 // parametersTool 返回飞控参数（topic 按问题域取支配参数 / 前缀过滤），
 // 并融合参数知识库：含义/单位/范围/默认值/枚举。当前值 vs 默认值 是排查
 // 配置问题的关键线索。
 func parametersTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_params",
 		"获取参数表（name→value）。优先用 topic 按问题域取支配参数（少量关键项，"+
-			"配合主题工具的排查链使用）；name_prefix 前缀过滤（如 EK3_，返回该前缀全部）。"+
-			"知识库覆盖时附 desc/unit/min/max（参考范围）/def（官方默认值，≠当前值=被改过）；"+
+			"配合主题工具的排查链使用；结果大量 null=固件参数体系可能不同，改用"+
+			" name_search/name_prefix 拉原始参数自行分析）；name_prefix 前缀过滤"+
+			"（如 EK3_）、name_search 名字子串全局搜索（如 RNGFND），可叠加。知识库"+
+			"覆盖时附 desc/unit/min/max（参考范围）/def（官方默认值，≠当前值=被改过）；"+
 			"value=null=日志未记录（通常=默认值，参考 def）。",
 		func(ctx context.Context, in parametersInput) (parametersOutput, error) {
 			params, err := deps.Log.Parameters(ctx)
@@ -170,9 +192,13 @@ func parametersTool(deps Deps) (tool.InvokableTool, error) {
 				matched = chainMatches(kb, deps.Class, chain.Params, logValues)
 			} else {
 				prefix := in.NamePrefix
+				search := strings.ToLower(strings.TrimSpace(in.NameSearch))
 				matched = make([]paramMatch, 0, len(params))
 				for _, p := range params {
 					if prefix != "" && !strings.HasPrefix(p.Name, prefix) {
+						continue
+					}
+					if search != "" && !strings.Contains(strings.ToLower(p.Name), search) {
 						continue
 					}
 					entry := paramMatch{name: p.Name, value: p.Value, inLog: true}
@@ -201,6 +227,7 @@ func parametersTool(deps Deps) (tool.InvokableTool, error) {
 				}
 				out.Rows = append(out.Rows, trimRow(row))
 			}
+			out.Hint = topicHint(matched)
 			out.Count = len(out.Rows)
 			// 截断：条目多时去掉尾部，提示用更精确的前缀分批取。
 			if len(out.Rows) > maxParamEntries {
