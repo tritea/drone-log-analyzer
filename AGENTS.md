@@ -16,6 +16,7 @@
 | 瓦片 provider / MBTiles 缓存管线 | [docs/map-tiles.md](docs/map-tiles.md) |
 | 前端编码规范（Vue/Pinia/TS） | [skills/vue-stand](skills/vue-stand/SKILL.md) |
 | 3D / MapLibre 渲染硬核规则 | [skills/frontend-3d-map](skills/frontend-3d-map/SKILL.md) |
+| LLM Agent token 经济学/知识分层/基准对齐 | [skills/llm-agent](skills/llm-agent/SKILL.md) |
 
 ## 模块边界（依赖只能自上而下）
 
