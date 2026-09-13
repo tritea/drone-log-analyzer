@@ -42,3 +42,17 @@ func TestParamTopicError(t *testing.T) {
 		t.Errorf("error message %q 应包含回退提示", msg)
 	}
 }
+
+// TestTopicHint 锁住回退提示语义：全部在日志中=无提示；有缺失=给出
+// 计数与暴力搜索（name_search/name_prefix）引导。
+func TestTopicHint(t *testing.T) {
+	all := []paramMatch{{name: "A", inLog: true, value: 1}, {name: "B", inLog: true, value: 2}}
+	if h := topicHint(all); h != "" {
+		t.Errorf("all-in-log hint = %q, want empty", h)
+	}
+	partial := append(all, paramMatch{name: "C"}, paramMatch{name: "D"})
+	h := topicHint(partial)
+	if !strings.Contains(h, "2/4") || !strings.Contains(h, "name_search") {
+		t.Errorf("hint %q 应含缺失计数与暴力搜索引导", h)
+	}
+}
