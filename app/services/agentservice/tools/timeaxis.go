@@ -3,27 +3,28 @@ package tools
 import "time"
 
 // AbsTime 是日志的绝对时间基准（起飞/日志起点的 UTC 纪元秒）。工具输出里
-// 的相对秒通过它换算为本地时区的墙上时间，让 AI 的回答与导出报告能引用
-// 真实时刻而非只有相对秒。nil 表示日志没有可信的 UTC 基准。
+// 的相对秒通过它渲染为 UTC 时刻——与界面曲线/时间轴显示同一口径，用户
+// 照着界面给的时刻与工具输出天然一致。nil 表示日志没有可信的 UTC 基准。
 type AbsTime struct {
 	StartUnix int64
 }
 
-// At 把相对秒渲染为本地时区时间串（"2006-01-02 15:04:05"）。
-// 桌面单机应用，本地时区即用户时区。
+// At 把相对秒渲染为 UTC 时间串（"2006-01-02 15:04:05"）。
 func (a *AbsTime) At(sec float64) string {
 	if a == nil {
 		return ""
 	}
-	return time.Unix(a.StartUnix, 0).Add(time.Duration(sec * float64(time.Second))).Format("2006-01-02 15:04:05")
+	return time.Unix(a.StartUnix, 0).Add(time.Duration(sec * float64(time.Second))).UTC().Format("2006-01-02 15:04:05")
 }
 
-// Start 把日志起点渲染为本地时区时间串。
+// Start 把日志起点渲染为 UTC 时间串，并带时区后缀（"2026-09-08 06:37:51
+// +00:00"）：时刻列全部是 UTC 口径，显式注明防止模型按本地时区二次换算
+// 或怀疑与 GPS 时间戳"对不上"。
 func (a *AbsTime) Start() string {
 	if a == nil {
 		return ""
 	}
-	return time.Unix(a.StartUnix, 0).Format("2006-01-02 15:04:05")
+	return time.Unix(a.StartUnix, 0).UTC().Format("2006-01-02 15:04:05 +00:00")
 }
 
 // AtShort 把相对秒渲染为短时刻（"15:04:05"）：日期与基准日相同时省略
@@ -33,7 +34,7 @@ func (a *AbsTime) AtShort(sec float64) string {
 	if a == nil {
 		return ""
 	}
-	base := time.Unix(a.StartUnix, 0)
+	base := time.Unix(a.StartUnix, 0).UTC()
 	t := base.Add(time.Duration(sec * float64(time.Second)))
 	if y, m, d := t.Date(); y == base.Year() && m == base.Month() && d == base.Day() {
 		return t.Format("15:04:05")

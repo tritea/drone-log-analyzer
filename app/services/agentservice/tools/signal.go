@@ -55,7 +55,7 @@ type queryResult struct {
 }
 
 type signalOutput struct {
-	TimeBase string        `json:"timeBase,omitempty"` // 相对秒 0 对应的绝对时刻（完整日期，本地时区）
+	TimeBase string        `json:"timeBase,omitempty"` // 相对秒 0 对应的绝对时刻（UTC，与界面显示同时区）
 	Dedupe   int           `json:"dedup,omitempty"`    // 被去重丢弃的重复查询数（同名/同操作/同窗口）
 	Results  []queryResult `json:"results"`
 }
