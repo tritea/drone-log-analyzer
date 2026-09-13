@@ -15,13 +15,13 @@ const PRESETS: Record<string, string> = {
 
 const agentStore = useAgentStore()
 
-/** 步数配置行：档位 → 表单字段与说明（title + 多行配置）。 */
+/** 步数配置行：档位 → 表单字段（定位说明仅作悬停提示，不占行内显示）。 */
 const stepFields: { key: keyof typeof form; label: string; hint: string }[] = [
-  { key: 'maxStepsMinimal', label: '极简', hint: '1~2 轮 · 快速扫描，找明显异常' },
-  { key: 'maxStepsFast', label: '快速', hint: '3~5 轮 · 定位主要问题，简单交叉验证' },
-  { key: 'maxStepsStandard', label: '标准', hint: '5~10 轮 · 常规完整分析' },
-  { key: 'maxStepsPro', label: '增强', hint: '10~20 轮 · 多数据源关联分析' },
-  { key: 'maxStepsDeep', label: '深度', hint: '20+ 轮 · 假设验证、反复推理' },
+  { key: 'maxStepsMinimal', label: '极简', hint: '快速扫描，找明显异常' },
+  { key: 'maxStepsFast', label: '快速', hint: '定位主要问题，简单交叉验证' },
+  { key: 'maxStepsStandard', label: '标准', hint: '常规完整分析' },
+  { key: 'maxStepsPro', label: '增强', hint: '多数据源关联分析' },
+  { key: 'maxStepsDeep', label: '深度', hint: '假设验证、反复推理' },
 ]
 
 const form = reactive({
@@ -113,9 +113,9 @@ function save(): void {
         <input v-model.number="form.temperature" type="number" min="0" max="2" step="0.1" />
       </label>
       <div class="steps-config">
-        <span class="steps-title">最大推理步数（各档独立，超出走强制收尾）</span>
+        <span class="steps-title">最大推理步数（各档独立；档位越高分析越深入，消耗的 token 也越多）</span>
         <label v-for="f in stepFields" :key="f.key" class="steps-item">
-          <span class="steps-label">{{ f.label }}<em class="steps-hint">{{ f.hint }}</em></span>
+          <span class="steps-label">{{ f.label }}</span>
           <input v-model.number="form[f.key]" type="number" min="1" max="50" step="1" :title="f.hint" />
         </label>
       </div>
@@ -156,7 +156,6 @@ function save(): void {
   color: var(--text2);
 }
 .steps-label { display: flex; align-items: baseline; gap: 8px; }
-.steps-hint { font-style: normal; font-size: 11px; color: var(--text3); }
 .steps-item input {
   width: 72px;
   border: 1px solid var(--border);
