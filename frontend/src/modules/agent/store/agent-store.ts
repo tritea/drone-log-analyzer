@@ -39,7 +39,7 @@ const defaultLlmConfig = (): LlmConfig => ({
   model: '',
   temperature: 0,
   maxStepsMinimal: 2,
-  maxStepsFast: 5,
+  maxStepsFast: 4,
   maxStepsStandard: 10,
   maxStepsPro: 13,
   maxStepsDeep: 25,

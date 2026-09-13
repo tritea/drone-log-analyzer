@@ -11,7 +11,7 @@ type LlmConfig struct {
 	Temperature float64 `json:"temperature"` // 0~2；0 表示未设置，用模型默认
 
 	// ReAct 迭代上限按分析档位分别配置；<=0 用默认
-	// （极简 2 / 快速 5 / 标准 10 / 增强 13 / 深度 25）。
+	// （极简 2 / 快速 4 / 标准 10 / 增强 13 / 深度 25）。
 	MaxStepsMinimal  int `json:"maxStepsMinimal"`
 	MaxStepsFast     int `json:"maxStepsFast"`
 	MaxStepsStandard int `json:"maxStepsStandard"`
