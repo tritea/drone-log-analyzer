@@ -31,7 +31,7 @@ const form = reactive({
   model: '',
   temperature: 0,
   maxStepsMinimal: 2,
-  maxStepsFast: 5,
+  maxStepsFast: 4,
   maxStepsStandard: 10,
   maxStepsPro: 13,
   maxStepsDeep: 25,
@@ -50,7 +50,7 @@ watch(
     form.model = cfg.model
     form.temperature = cfg.temperature
     form.maxStepsMinimal = cfg.maxStepsMinimal || 2
-    form.maxStepsFast = cfg.maxStepsFast || 5
+    form.maxStepsFast = cfg.maxStepsFast || 4
     form.maxStepsStandard = cfg.maxStepsStandard || 10
     form.maxStepsPro = cfg.maxStepsPro || 13
     form.maxStepsDeep = cfg.maxStepsDeep || 25
