@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/cloudwego/eino/components/model"
 	openaix "github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/components/model"
 
 	appmodel "drone-log-analyzer/app/model"
 )

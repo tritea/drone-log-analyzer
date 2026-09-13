@@ -39,13 +39,29 @@ func sanitizeLlmConfig(cfg appmodel.LlmConfig) *appmodel.LlmConfig {
 	if cfg.Temperature > 2 {
 		cfg.Temperature = 2
 	}
-	if cfg.MaxSteps <= 0 {
-		cfg.MaxSteps = defaultLlmMaxSteps
-	}
-	if cfg.MaxSteps > 50 {
-		cfg.MaxSteps = 50
-	}
+	cfg.MaxStepsMinimal = clampLlmSteps(cfg.MaxStepsMinimal, defaultLlmStepsMinimal)
+	cfg.MaxStepsFast = clampLlmSteps(cfg.MaxStepsFast, defaultLlmStepsFast)
+	cfg.MaxStepsStandard = clampLlmSteps(cfg.MaxStepsStandard, defaultLlmStepsStandard)
+	cfg.MaxStepsPro = clampLlmSteps(cfg.MaxStepsPro, defaultLlmStepsPro)
+	cfg.MaxStepsDeep = clampLlmSteps(cfg.MaxStepsDeep, defaultLlmStepsDeep)
 	return &cfg
 }
 
-const defaultLlmMaxSteps = 15
+// clampLlmSteps 钳制迭代上限到 1~50；<=0 用档位默认。
+func clampLlmSteps(v, def int) int {
+	if v <= 0 {
+		return def
+	}
+	if v > 50 {
+		return 50
+	}
+	return v
+}
+
+const (
+	defaultLlmStepsMinimal  = 2  // 极简：快速扫描，找明显异常
+	defaultLlmStepsFast     = 5  // 快速：定位主要问题，简单交叉验证
+	defaultLlmStepsStandard = 10 // 标准：常规完整分析
+	defaultLlmStepsPro      = 20 // 增强：多数据源关联分析
+	defaultLlmStepsDeep     = 25 // 深度：假设验证、反复推理
+)
