@@ -129,7 +129,8 @@ type parametersOutput struct {
 // （tlog 只截获流过的 PARAM_VALUE，缺失含义不明）时保留占位（value=null，
 // 通常=保持默认）。纯函数便于单测。
 func chainMatches(kb *knowledge.ParamsKB, class knowledge.VehicleClass, names []string,
-	logValues map[string]float64, paramsComplete bool) (kept []paramMatch, dropped []string) {
+	logValues map[string]float64, paramsComplete bool,
+) (kept []paramMatch, dropped []string) {
 	kept = make([]paramMatch, 0, len(names))
 	for _, name := range names {
 		m := paramMatch{name: name}
@@ -173,9 +174,9 @@ func groupScan(chain, dropped []string, logValues map[string]float64, listed map
 	}
 	sort.Strings(names)
 	total := len(names)
-	trunc := total > maxParamEntries
+	trunc := total > groupScanMaxEntries
 	if trunc {
-		names = names[:maxParamEntries]
+		names = names[:groupScanMaxEntries]
 	}
 	rows := make([][]any, 0, len(names))
 	for _, n := range names {

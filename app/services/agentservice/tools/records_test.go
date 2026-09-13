@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -73,6 +74,17 @@ func TestGroupScan(t *testing.T) {
 	}
 	if rows[2][1] != float64(1) {
 		t.Errorf("RNGFND2_TYPE value = %v, want 1", rows[2][1])
+	}
+
+	// 截断：超上限时 total 记全量、trunc 置位（单族可超 120，上限只防失控）。
+	big := map[string]float64{}
+	for i := range groupScanMaxEntries + 5 {
+		big[fmt.Sprintf("EK3_FAKE_%03d", i)] = float64(i)
+	}
+	rows, total, trunc = groupScan(chain, nil, big, nil)
+	if !trunc || total != groupScanMaxEntries+5 || len(rows) != groupScanMaxEntries {
+		t.Errorf("trunc=%v total=%d len=%d, want true/%d/%d",
+			trunc, total, len(rows), groupScanMaxEntries+5, groupScanMaxEntries)
 	}
 }
 

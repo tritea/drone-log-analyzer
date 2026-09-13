@@ -62,6 +62,12 @@ const (
 	maxAbnSegments    = 50  // abnormal 每级段行上限（超出的丢弃，总越限秒仍按全量计）
 	abnMergeGapSecs   = 1.0 // abnormal 相邻段合并间隔（秒）：阈值附近抖动的毛刺段并成一场
 
+	// groupScanMaxEntries 是 topic 路径同族扫描（groupRows）的条目上限，
+	// 比 maxParamEntries 高：仅名称+值（无描述列）行成本 ~1/5，而单族就可能
+	// 超过 120（EK3_* 新固件 ~130 个），按字母序截断会恰好切掉 EK3_SRC* 这类
+	// 排后的关键参数——宁多勿缺，上限只防真正的失控。
+	groupScanMaxEntries = 250
+
 	// maxRawRowsPerRound 是一轮（一次 Chat）内全部 raw 查询共享的原始点
 	// 总预算：迭代重发乘法下无上限的原始序列会把上下文放大到百万 token。
 	MaxRawRowsPerRound = 2400
