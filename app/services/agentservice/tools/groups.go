@@ -11,34 +11,28 @@ import (
 
 type listGroupsInput struct{}
 
-// groupCols：desc/affects 来自知识库（空=未覆盖）。
-var groupCols = []string{"name", "samples", "fields", "desc", "affects"}
-
 type listGroupsOutput struct {
-	Cols []string `json:"cols"`
-	Rows [][]any  `json:"rows"`
+	Groups []string `json:"groups"` // 有数据的数据分组名（无样本的类型不列）
 }
 
-// listGroupsTool 列出当前日志实际存在的 group，左连接知识库描述。
-// 日志里真实有的才出现；知识库没覆盖的 group 也列出（描述留空），
-// 这样 AI 不会漏掉可用数据。
+// listGroupsTool 列出当前日志实际存在数据的分组名——纯名单，不带描述/
+// 统计：分组含义模型训练知识已覆盖（GPS/ATT/BARO/CTUN 等），字段级
+// 详情由 get_fields 按名查看。tlog 单日志可有数百消息类型，行式编码+
+// 描述列会把浏览变成上下文大头（实测 12.7k 字符），名单压到 ~4k。
 func listGroupsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("list_groups",
-		"列出日志里实际存在的数据分组：名称、样本数、字段数与用途/影响说明（空=未覆盖）。",
+		"列出日志里实际存在数据的数据分组名（纯名单，无样本的类型不列）。"+
+			"分组的字段清单用 get_fields 按名查看。",
 		func(ctx context.Context, _ listGroupsInput) (listGroupsOutput, error) {
 			types, err := deps.Log.MessageTypes(ctx)
 			if err != nil {
 				return listGroupsOutput{}, err
 			}
-			kb := knowledge.ForFormat(deps.Format)
-			out := listGroupsOutput{Cols: groupCols, Rows: make([][]any, 0, len(types))}
+			out := listGroupsOutput{}
 			for _, ti := range types {
-				desc, affects := "", any(nil)
-				if gm := knowledge.FilterGroup(kb.Group(ti.Name), deps.Class); gm != nil {
-					desc = gm.Description
-					affects = strsOrNil(gm.Affects)
+				if ti.Count > 0 {
+					out.Groups = append(out.Groups, ti.Name)
 				}
-				out.Rows = append(out.Rows, trimRow([]any{ti.Name, ti.Count, len(ti.Fields), desc, affects}))
 			}
 			return out, nil
 		})
