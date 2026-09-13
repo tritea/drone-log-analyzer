@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, watch } from 'vue';
 import { agentClient, onAgentEvent } from '@/services/agent';
-import type { AgentEvent, ChatMessage, LlmConfig } from '@/services/agent';
+import type { AgentEvent, AnalysisLevel, ChatMessage, LlmConfig } from '@/services/agent';
 import { useLogStore } from '@/modules/log';
 import { useAnalysisStore } from '@/modules/analysis';
 import { showToast } from '@/modules/shared/ui-store';
@@ -38,7 +38,11 @@ const defaultLlmConfig = (): LlmConfig => ({
   apiKey: '',
   model: '',
   temperature: 0,
-  maxSteps: 15,
+  maxStepsMinimal: 2,
+  maxStepsFast: 5,
+  maxStepsStandard: 10,
+  maxStepsPro: 20,
+  maxStepsDeep: 25,
 });
 
 export const useAgentStore = defineStore('agent', () => {
@@ -51,6 +55,8 @@ export const useAgentStore = defineStore('agent', () => {
     llm: defaultLlmConfig(),
     llmPath: '',
     settingsOpen: false,
+    /** 分析深度（随每轮 Chat 发送）：fast 少查早停 / standard 问什么答什么 / deep 广域扫描。 */
+    level: 'standard' as AnalysisLevel,
   });
 
   /** 本地 baseUrl（Ollama 等）无需 API Key。 */
@@ -192,7 +198,7 @@ export const useAgentStore = defineStore('agent', () => {
     agent.error = '';
     agent.streaming = { active: true, text: '', reasoning: '', tools: [] };
     try {
-      const resp = await agentClient.chat(message);
+      const resp = await agentClient.chat(message, agent.level);
       if (resp?.message) agent.messages.push(resp.message);
     } catch (err) {
       agent.error = errText(err);

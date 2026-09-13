@@ -1,4 +1,5 @@
 import type {
+  AnalysisLevel,
   ChatResponse,
   HistoryResponse,
   LlmConfig,
@@ -6,7 +7,7 @@ import type {
 } from './types';
 
 export interface AgentClient {
-  chat(message: string): Promise<ChatResponse>;
+  chat(message: string, level?: AnalysisLevel): Promise<ChatResponse>;
   stop(): Promise<void>;
   history(): Promise<HistoryResponse>;
   clear(): Promise<void>;

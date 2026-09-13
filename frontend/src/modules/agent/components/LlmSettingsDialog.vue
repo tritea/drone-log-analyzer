@@ -21,7 +21,11 @@ const form = reactive({
   apiKey: '',
   model: '',
   temperature: 0,
-  maxSteps: 15,
+  maxStepsMinimal: 2,
+  maxStepsFast: 5,
+  maxStepsStandard: 10,
+  maxStepsPro: 20,
+  maxStepsDeep: 25,
 })
 
 const error = ref('')
@@ -36,7 +40,11 @@ watch(
     form.apiKey = cfg.apiKey
     form.model = cfg.model
     form.temperature = cfg.temperature
-    form.maxSteps = cfg.maxSteps
+    form.maxStepsMinimal = cfg.maxStepsMinimal || 2
+    form.maxStepsFast = cfg.maxStepsFast || 5
+    form.maxStepsStandard = cfg.maxStepsStandard || 10
+    form.maxStepsPro = cfg.maxStepsPro || 20
+    form.maxStepsDeep = cfg.maxStepsDeep || 25
     error.value = ''
   },
 )
@@ -97,8 +105,14 @@ function save(): void {
           <input v-model.number="form.temperature" type="number" min="0" max="2" step="0.1" />
         </label>
         <label class="field">
-          <span>最大推理步数</span>
-          <input v-model.number="form.maxSteps" type="number" min="1" max="50" step="1" />
+          <span>最大推理步数（极简/快速/标准/增强/深度）</span>
+          <span class="steps-row">
+            <input v-model.number="form.maxStepsMinimal" type="number" min="1" max="50" step="1" title="极简档：快速扫描" />
+            <input v-model.number="form.maxStepsFast" type="number" min="1" max="50" step="1" title="快速档：定位主要问题" />
+            <input v-model.number="form.maxStepsStandard" type="number" min="1" max="50" step="1" title="标准档：常规完整分析" />
+            <input v-model.number="form.maxStepsPro" type="number" min="1" max="50" step="1" title="增强档：多数据源关联" />
+            <input v-model.number="form.maxStepsDeep" type="number" min="1" max="50" step="1" title="深度档：假设验证反复推理" />
+          </span>
         </label>
       </div>
       <p v-if="error" class="form-error">{{ error }}</p>
@@ -127,6 +141,7 @@ function save(): void {
   background: var(--surface-soft);
 }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.steps-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .form-error { color: var(--red); font-size: 12px; margin: 0; }
 .form-note { color: var(--text3); font-size: 12px; margin: 0; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }

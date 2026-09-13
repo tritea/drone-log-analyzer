@@ -2,6 +2,7 @@ import * as agentAPI from '@/wailsjs/go/wails/AgentAPI';
 import * as configAPI from '@/wailsjs/go/wails/ConfigAPI';
 import type { AgentClient } from '../client';
 import type {
+  AnalysisLevel,
   ChatResponse,
   HistoryResponse,
   LlmConfig,
@@ -22,8 +23,8 @@ function toPlain<T>(source: unknown): T {
 }
 
 export const wailsAgentClient: AgentClient = {
-  chat: async (message: string): Promise<ChatResponse> =>
-    toPlain(await agentAPI.Chat({ message })),
+  chat: async (message: string, level?: AnalysisLevel): Promise<ChatResponse> =>
+    toPlain(await agentAPI.Chat({ message, level })),
   stop: () => agentAPI.Stop(),
   history: async (): Promise<HistoryResponse> => toPlain(await agentAPI.History()),
   clear: () => agentAPI.Clear(),

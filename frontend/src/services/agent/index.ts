@@ -6,6 +6,7 @@ export const agentClient = wailsAgentClient;
 export type { AgentClient } from './client';
 export type {
   AgentEvent,
+  AnalysisLevel,
   ChatMessage,
   ChatResponse,
   HistoryResponse,
