@@ -54,18 +54,6 @@ func thrRows(ts []knowledge.Threshold) any {
 	return rows
 }
 
-// anaRows 分析启发式 → [条件,含义] 行数组；空 → nil。
-func anaRows(ns []knowledge.AnalysisNote) any {
-	if len(ns) == 0 {
-		return nil
-	}
-	rows := make([][]any, len(ns))
-	for i, n := range ns {
-		rows[i] = []any{n.Condition, n.Meaning}
-	}
-	return rows
-}
-
 // nameOrID 名称缺省时回退 "#<id>"，合并名称/编号两列为一格。
 func nameOrID(name string, id int) string {
 	if name != "" {

@@ -48,7 +48,7 @@ func TestRowCellHelpers(t *testing.T) {
 	}
 }
 
-func TestThrRowsAndAnaRows(t *testing.T) {
+func TestThrRows(t *testing.T) {
 	if got := thrRows(nil); got != nil {
 		t.Errorf("thrRows(nil) = %v, want nil", got)
 	}
@@ -56,15 +56,6 @@ func TestThrRowsAndAnaRows(t *testing.T) {
 	want := [][]any{{"warning", "lt", float64(8)}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("thrRows = %v, want %v", got, want)
-	}
-
-	if got := anaRows(nil); got != nil {
-		t.Errorf("anaRows(nil) = %v, want nil", got)
-	}
-	got = anaRows([]knowledge.AnalysisNote{{Condition: "c", Meaning: "m"}})
-	want = [][]any{{"c", "m"}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("anaRows = %v, want %v", got, want)
 	}
 }
 
