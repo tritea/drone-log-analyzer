@@ -35,7 +35,6 @@ const form = reactive({
   maxStepsStandard: 10,
   maxStepsPro: 13,
   maxStepsDeep: 25,
-  inRoundDiet: true,
 })
 
 const error = ref('')
@@ -50,7 +49,6 @@ watch(
     form.apiKey = cfg.apiKey
     form.model = cfg.model
     form.temperature = cfg.temperature
-    form.inRoundDiet = !cfg.disableInRoundDiet
     form.maxStepsMinimal = cfg.maxStepsMinimal || 2
     form.maxStepsFast = cfg.maxStepsFast || 5
     form.maxStepsStandard = cfg.maxStepsStandard || 10
@@ -76,7 +74,7 @@ function save(): void {
     return
   }
   agentStore
-    .saveLlmConfig({ ...form, disableInRoundDiet: !form.inRoundDiet })
+    .saveLlmConfig({ ...form })
     .catch((err: unknown) => {
       error.value = err instanceof Error ? err.message : String(err)
     })
@@ -121,10 +119,6 @@ function save(): void {
           <input v-model.number="form[f.key]" type="number" min="1" max="50" step="1" :title="f.hint" />
         </label>
       </div>
-      <label class="diet-toggle" title="多轮迭代重发上下文时，旧工具结果只保留统计与元数据、批量数据裁剪为摘录">
-        <input v-model="form.inRoundDiet" type="checkbox" />
-        <span>轮内压缩（降低多轮 token 消耗；结论引用的统计值不受影响）</span>
-      </label>
       <p v-if="error" class="form-error">{{ error }}</p>
       <p class="form-note">
         需要支持 Function Calling 的模型。密钥只保存在本机用户配置目录，不会上传。
@@ -152,14 +146,6 @@ function save(): void {
 }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .steps-config { display: flex; flex-direction: column; gap: 6px; }
-.diet-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text2);
-  cursor: pointer;
-}
 .steps-title { font-size: 12px; color: var(--text2); }
 .steps-item {
   display: flex;

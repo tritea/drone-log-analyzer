@@ -17,9 +17,4 @@ type LlmConfig struct {
 	MaxStepsStandard int `json:"maxStepsStandard"`
 	MaxStepsPro      int `json:"maxStepsPro"`
 	MaxStepsDeep     int `json:"maxStepsDeep"`
-
-	// DisableInRoundDiet 关闭轮内压缩（默认开启）：每次模型调用重发全
-	// 上下文时，把早期批次的工具结果压成保结构摘录（只裁批量数组、保留
-	// 统计与元数据），控制迭代重发的上下文放大。落盘历史不受影响。
-	DisableInRoundDiet bool `json:"disableInRoundDiet,omitempty"`
 }

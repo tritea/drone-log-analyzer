@@ -142,17 +142,12 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 	if maxIter <= 0 {
 		maxIter = 10
 	}
-	agentCfg := &adk.ChatModelAgentConfig{
+	ag, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Instruction:   buildSystemPrompt(sum, class, level),
 		Model:         cm,
 		ToolsConfig:   adk.ToolsConfig{ToolsNodeConfig: compose.ToolsNodeConfig{Tools: built}},
 		MaxIterations: maxIter,
-	}
-	// 轮内压缩（默认开）：每次迭代重发时旧批次工具结果裁批量数据保标量。
-	if !cfg.DisableInRoundDiet {
-		agentCfg.Handlers = append(agentCfg.Handlers, newDietMiddleware())
-	}
-	ag, err := adk.NewChatModelAgent(ctx, agentCfg)
+	})
 	if err != nil {
 		return nil, err
 	}
