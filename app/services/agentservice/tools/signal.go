@@ -235,7 +235,11 @@ func runQuery(ctx context.Context, deps Deps, q signalQuery) queryResult {
 		ds := fieldstats.Downsample(win, maxPoints)
 		ptsT, ptsV := make([]float64, ds.Len()), make([]float64, ds.Len())
 		for i := 0; i < ds.Len(); i++ {
-			ptsT[i], ptsV[i] = round3(ds.Times[i]), round3(ds.Values[i])
+			// 降采样点的精度收敛：t 到 0.1s、值到 0.01——点距已数百 ms 起，
+			// 更细的数字是序列化浪费（精确值走统计操作）；粗舍入也让 RLE
+			// 能合并更多近平坦段。
+			ptsT[i] = math.Round(ds.Times[i]*10) / 10
+			ptsV[i] = math.Round(ds.Values[i]*100) / 100
 		}
 		res.Points = rlePoints(ptsT, ptsV)
 		if ds.Len() > 1 {
