@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"sort"
 
 	"github.com/cloudwego/eino/components/tool"
 
@@ -10,64 +9,38 @@ import (
 	"drone-log-analyzer/app/services/logservice"
 )
 
-type listGroupsInput struct {
-	MinSamples int `json:"min_samples,omitempty" jsonschema_description:"只列样本数≥该值的分组（tlog 消息类型极多，用它滤掉低频类型），缺省=全部"`
-}
+type listGroupsInput struct{}
 
-// groupCols：索引菜单只列身份与规模——分组用途/影响说明走 get_fields
-// （选中组后必经的一步），避免浏览阶段全量倒知识库描述。
-var groupCols = []string{"name", "samples", "fields"}
+// groupCols：desc/affects 来自知识库（空=未覆盖）。
+var groupCols = []string{"name", "samples", "fields", "desc", "affects"}
 
 type listGroupsOutput struct {
-	Count     int      `json:"count"` // 命中总数（rows 可能被截断）
-	Truncated bool     `json:"truncated,omitempty"`
-	Cols      []string `json:"cols"`
-	Rows      [][]any  `json:"rows"`
+	Cols []string `json:"cols"`
+	Rows [][]any  `json:"rows"`
 }
 
-// rankGroups 过滤并排序分组行：丢弃无样本的类型（没有可查数据，纯噪声），
-// minSamples 过滤低频类型，按样本数降序（高采样率分组通常诊断价值更高，
-// 同数时保序稳定），超上限截断——tlog 单日志可有 400+ 活跃消息类型，
-// 全量倒给模型是上下文浪费（实测 523 行 / 12.7k 字符）。纯函数便于单测。
-func rankGroups(rows [][]any, minSamples int) ([][]any, int, bool) {
-	filtered := make([][]any, 0, len(rows))
-	for _, r := range rows {
-		n, _ := r[1].(int)
-		if n <= 0 || (minSamples > 0 && n < minSamples) {
-			continue
-		}
-		filtered = append(filtered, r)
-	}
-	sort.SliceStable(filtered, func(i, j int) bool {
-		return filtered[i][1].(int) > filtered[j][1].(int)
-	})
-	total := len(filtered)
-	trunc := total > maxRecordEntries
-	if trunc {
-		filtered = filtered[:maxRecordEntries]
-	}
-	return filtered, total, trunc
-}
-
-// listGroupsTool 列出当前日志实际存在的 group（索引菜单）。无样本的类型
-// 不列；按样本数降序、超上限截断（count 记全量）。分组的用途描述与字段
-// 详情由 get_fields 提供——主题工具未覆盖的领域用它兜底浏览。
+// listGroupsTool 列出当前日志实际存在的 group，左连接知识库描述。
+// 日志里真实有的才出现；知识库没覆盖的 group 也列出（描述留空），
+// 这样 AI 不会漏掉可用数据。
 func listGroupsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("list_groups",
-		"列出日志里实际存在的数据分组索引（名称/样本数/字段数；按样本数降序，"+
-			"超 200 截断，min_samples 可过滤低频类型）。分组的用途说明与字段清单"+
-			"用 get_fields 查看；常见问题域优先用主题工具直达。",
-		func(ctx context.Context, in listGroupsInput) (listGroupsOutput, error) {
+		"列出日志里实际存在的数据分组：名称、样本数、字段数与用途/影响说明（空=未覆盖）。",
+		func(ctx context.Context, _ listGroupsInput) (listGroupsOutput, error) {
 			types, err := deps.Log.MessageTypes(ctx)
 			if err != nil {
 				return listGroupsOutput{}, err
 			}
-			rows := make([][]any, 0, len(types))
+			kb := knowledge.ForFormat(deps.Format)
+			out := listGroupsOutput{Cols: groupCols, Rows: make([][]any, 0, len(types))}
 			for _, ti := range types {
-				rows = append(rows, []any{ti.Name, ti.Count, len(ti.Fields)})
+				desc, affects := "", any(nil)
+				if gm := knowledge.FilterGroup(kb.Group(ti.Name), deps.Class); gm != nil {
+					desc = gm.Description
+					affects = strsOrNil(gm.Affects)
+				}
+				out.Rows = append(out.Rows, trimRow([]any{ti.Name, ti.Count, len(ti.Fields), desc, affects}))
 			}
-			kept, total, trunc := rankGroups(rows, in.MinSamples)
-			return listGroupsOutput{Count: total, Truncated: trunc, Cols: groupCols, Rows: kept}, nil
+			return out, nil
 		})
 }
 
