@@ -58,6 +58,76 @@ func TestTrimContextDropsOldRoundsOverBudget(t *testing.T) {
 	}
 }
 
+// TestStripIncidentFence 锁住历史机读块剥离：正文时间线保留、incident 长
+// JSON 压成占位（模型重读纯浪费），原消息不被修改（会话落盘仍完整）。
+func TestStripIncidentFence(t *testing.T) {
+	src := "结论文字A\n\n```incident\n[{\"startSec\":1},{\"startSec\":2},{\"startSec\":3}]\n```\n\n结尾文字"
+	m := &schema.Message{Role: schema.Assistant, Content: src}
+
+	got := stripIncidentFence(m)
+	if got == m {
+		t.Fatal("应返回新副本")
+	}
+	if strings.Contains(got.Content, "startSec") {
+		t.Errorf("机读块应被剥离: %q", got.Content)
+	}
+	if !strings.Contains(got.Content, "结论文字A") || !strings.Contains(got.Content, "结尾文字") {
+		t.Errorf("正文不应受影响: %q", got.Content)
+	}
+	if strings.Contains(m.Content, "已省略") || !strings.Contains(m.Content, "startSec") {
+		t.Error("原消息不得被修改（落盘需完整）")
+	}
+
+	// 无围栏的助手消息与工具消息原样返回。
+	plain := &schema.Message{Role: schema.Assistant, Content: "普通回答"}
+	if stripIncidentFence(plain) != plain {
+		t.Error("无围栏消息应原样返回")
+	}
+}
+
+// TestRepairTail 锁住中断轮的尾部修复：tool_calls 与结果必须成对保留，
+// 孤儿配对会让下一轮请求被 API 拒绝；完整序列原样返回。
+func TestRepairTail(t *testing.T) {
+	tc := func(id string) []schema.ToolCall {
+		return []schema.ToolCall{{ID: id, Type: "function", Function: schema.FunctionCall{Name: "query_data"}}}
+	}
+	toolMsg := func(id string) *schema.Message {
+		return &schema.Message{Role: schema.Tool, ToolCallID: id, ToolName: "query_data", Content: "{}"}
+	}
+	cases := []struct {
+		name string
+		in   []*schema.Message
+		want int // 期望保留的消息数
+	}{
+		{"完整序列原样", []*schema.Message{
+			{Role: schema.Assistant, ToolCalls: tc("c1")}, toolMsg("c1"),
+			{Role: schema.Assistant, Content: "结论"},
+		}, 3},
+		{"尾部孤儿tool_calls截掉", []*schema.Message{
+			{Role: schema.Assistant, ToolCalls: tc("c1")}, toolMsg("c1"),
+			{Role: schema.Assistant, ToolCalls: tc("c2")},
+		}, 2},
+		{"结果只到一半截到上一对", []*schema.Message{
+			{Role: schema.Assistant, ToolCalls: tc("c1")}, toolMsg("c1"),
+			{Role: schema.Assistant, ToolCalls: append(tc("c2"), tc("c3")...)}, toolMsg("c2"),
+		}, 2},
+		{"只有孤儿返回空", []*schema.Message{
+			{Role: schema.Assistant, ToolCalls: tc("c1")},
+		}, 0},
+		{"多段截到中断点", []*schema.Message{
+			{Role: schema.Assistant, ToolCalls: tc("c1")}, toolMsg("c1"),
+			{Role: schema.Assistant, Content: "中间结论"},
+			{Role: schema.Assistant, ToolCalls: tc("c2")},
+		}, 3},
+	}
+	for _, c := range cases {
+		got := repairTail(c.in)
+		if len(got) != c.want {
+			t.Errorf("%s: kept %d msgs, want %d", c.name, len(got), c.want)
+		}
+	}
+}
+
 func TestTrimContextAtLeastOneRound(t *testing.T) {
 	big := strings.Repeat("d", historyBudgetChars*3)
 	msgs := round("唯一的问题", big, "回答", "c1")

@@ -3,6 +3,7 @@ package agentservice
 // ChatRequest 是一轮对话的输入。
 type ChatRequest struct {
 	Message string `json:"message"`
+	Level   string `json:"level,omitempty"` // 分析深度：minimal（极简）/ fast（快速）/ standard（默认）/ pro（专业）/ deep（深度）；缺省 standard
 }
 
 // ToolCallTrace 是一次工具调用的展示轨迹（前端折叠条）。
@@ -44,11 +45,11 @@ type AgentEvent struct {
 
 	Text string `json:"text,omitempty"` // delta 增量文本
 
-	Tool        string         `json:"tool,omitempty"` // tool_start / tool_end
-	Args        map[string]any `json:"args,omitempty"`
-	Summary     string         `json:"summary,omitempty"`
-	DurationMs  int64          `json:"durationMs,omitempty"`
+	Tool       string         `json:"tool,omitempty"` // tool_start / tool_end
+	Args       map[string]any `json:"args,omitempty"`
+	Summary    string         `json:"summary,omitempty"`
+	DurationMs int64          `json:"durationMs,omitempty"`
 
 	Message *ChatMessage `json:"message,omitempty"` // final
-	Error   string       `json:"error,omitempty"`    // error
+	Error   string       `json:"error,omitempty"`   // error
 }

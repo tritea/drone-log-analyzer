@@ -110,7 +110,8 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 	}
 	built, err := tools.Build(tools.Deps{
 		Log: s.deps.Log, Format: sum.Format, Class: class, Abs: abs,
-		OriginMs: sum.StartTimeMs,
+		OriginMs:  sum.StartTimeMs,
+		RawBudget: tools.NewRawBudget(tools.MaxRawRowsPerRound),
 	})
 	if err != nil {
 		return nil, err
@@ -119,12 +120,30 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 	if err != nil {
 		return nil, err
 	}
-	maxIter := cfg.MaxSteps
+	// 分析档位：minimal 极简 / fast 快速 / standard 标准 / pro 增强 / deep 深度。
+	level := strings.ToLower(strings.TrimSpace(req.Level))
+	switch level {
+	case "minimal", "fast", "pro", "deep":
+	default:
+		level = "standard"
+	}
+	// 迭代上限按档位取（configservice 已归一为非零；此处再兜底）。
+	maxIter := cfg.MaxStepsStandard
+	switch level {
+	case "minimal":
+		maxIter = cfg.MaxStepsMinimal
+	case "fast":
+		maxIter = cfg.MaxStepsFast
+	case "pro":
+		maxIter = cfg.MaxStepsPro
+	case "deep":
+		maxIter = cfg.MaxStepsDeep
+	}
 	if maxIter <= 0 {
-		maxIter = 15
+		maxIter = 10
 	}
 	ag, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Instruction:   buildSystemPrompt(sum, class),
+		Instruction:   buildSystemPrompt(sum, class, level),
 		Model:         cm,
 		ToolsConfig:   adk.ToolsConfig{ToolsNodeConfig: compose.ToolsNodeConfig{Tools: built}},
 		MaxIterations: maxIter,
@@ -165,16 +184,40 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 	}
 
 	answer := r.finalAnswer()
+	// 出错/中断也保留本轮已产生的消息（已花费的工具调用不浪费，重试不必
+	// 重跑）；repairTail 截掉结果未到齐的 tool_calls 段——孤儿配对会让
+	// 下一轮请求被 API 拒绝。
+	round := append([]*schema.Message{schema.UserMessage(msg)}, repairTail(r.msgs)...)
 	switch {
 	case runErr == nil:
 	case errors.Is(runErr, context.Canceled):
 		if answer == "" {
+			s.extendRound(sess, round, "（本轮被手动停止，已获取的工具结果已保留，可继续提问）")
 			s.emitError("已停止")
 			return nil, runErr
 		}
 		answer += "\n\n（本轮被手动停止，以上为已生成的部分）"
+	case errors.Is(runErr, adk.ErrExceedMaxIterations) && len(r.msgs) > 0:
+		// 迭代超限不报废整轮：用已获取的数据强制收尾作答。
+		pr, summary := s.forceSummary(runCtx, cfg, buildSystemPrompt(sum, class, level), round)
+		r.addUsage(pr)
+		if summary != "" {
+			runErr = nil
+			answer = summary + "\n\n> 注：本轮查询已达次数上限，以上结论基于已获取的数据。"
+			// 收尾结论必须落盘：forceSummary 是独立调用，其输出不会像正常
+			// 路径那样经 eino 的最终文本消息进入 r.msgs——不补进 round 的话
+			// 重启即丢结论，下一轮模型也看不到自己上一轮说了什么。
+			m := schema.AssistantMessage(answer, nil)
+			r.msgs = append(r.msgs, m)
+			round = append(round, m)
+		} else {
+			s.emitError(runErr.Error())
+			s.extendRound(sess, round, "（上一轮因错误中断，已获取的工具结果已保留，可继续提问）")
+			return nil, runErr
+		}
 	default:
 		s.emitError(runErr.Error())
+		s.extendRound(sess, round, "（上一轮因错误中断，已获取的工具结果已保留，可继续提问）")
 		return nil, runErr
 	}
 	if answer == "" {
@@ -187,10 +230,7 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 		ToolTrace: r.trace(),
 	}
 	// 历史回填：user + 本轮完整交错序列（assistant/tool 保留 ToolCalls 供
-	// 下一轮上下文）。被停止的半轮也保留已生成部分。随后落盘（重开可恢复）。
-	round := make([]*schema.Message, 0, len(r.msgs)+1)
-	round = append(round, schema.UserMessage(msg))
-	round = append(round, r.msgs...)
+	// 下一轮上下文）。随后落盘（重开可恢复）。
 	sess.extend(round)
 
 	// 缺合法 incident 机读块时静默补一轮（模型偶尔漏输出或写成排版文本）：
@@ -282,4 +322,15 @@ func (s *service) emitFinal(msg agentservice.ChatMessage) {
 	if s.deps.Sink != nil {
 		s.deps.Sink(agentservice.AgentEvent{Type: "final", Message: &msg})
 	}
+}
+
+// extendRound 把一轮消息写进会话并落盘。note 非空时补一条助手说明，
+// 让中断轮的历史对下一轮可读（否则历史结尾悬在工具结果上，模型不知道
+// 上一轮为何没有结论）；出错/中断路径靠它保留已花费的工具结果。
+func (s *service) extendRound(sess *session, round []*schema.Message, note string) {
+	if note != "" {
+		round = append(round, schema.AssistantMessage(note, nil))
+	}
+	sess.extend(round)
+	sess.save()
 }
