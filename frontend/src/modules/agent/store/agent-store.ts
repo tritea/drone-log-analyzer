@@ -59,6 +59,18 @@ export const useAgentStore = defineStore('agent', () => {
     level: 'standard' as AnalysisLevel,
   });
 
+  // 分析档位持久化（localStorage，与面板宽度同一模式）：跨启动保留选择。
+  const LEVEL_KEY = 'agent.analysisLevel';
+  {
+    const saved = localStorage.getItem(LEVEL_KEY) as AnalysisLevel | null;
+    const valid: AnalysisLevel[] = ['minimal', 'fast', 'standard', 'pro', 'deep'];
+    if (saved && valid.includes(saved)) agent.level = saved;
+  }
+  watch(
+    () => agent.level,
+    (v) => localStorage.setItem(LEVEL_KEY, v),
+  );
+
   /** 本地 baseUrl（Ollama 等）无需 API Key。 */
   const llmConfigured = computed(() => {
     const cfg = agent.llm;
