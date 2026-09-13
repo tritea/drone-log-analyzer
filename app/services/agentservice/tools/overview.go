@@ -30,7 +30,7 @@ type overviewOutput struct {
 
 func overviewTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_overview",
-		"获取当前日志的整体概况：格式、机型、固件、时长、参数量与错误/事件/模式切换计数。"+
+		"当前日志整体概况：格式、机型、固件、时长、参数量与错误/事件/模式切换计数。"+
 			"分析任何问题前先调用它。",
 		func(ctx context.Context, _ overviewInput) (overviewOutput, error) {
 			var out overviewOutput

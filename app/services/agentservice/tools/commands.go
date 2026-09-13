@@ -49,9 +49,8 @@ type missionOutput struct {
 // 版本切换时刻本身常是事故线索。
 func missionTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_mission",
-		"获取任务航线（航点序列）：每版含上传时刻与航点行数组（cols 标列序，行尾空列省略；"+
-			"seq/cmd/坐标/高度/参数），cmd 缺名时为 #<命令号>，高度参考 frame（相对/绝对）。"+
-			"飞行中航线被重新上传会产生多个版本，版本切换时刻值得重点关注。"+
+		"获取任务航线（航点序列），每版含上传时刻；高度参考 frame（相对/绝对），"+
+			"cmd 缺名时为 #<命令号>。飞行中航线被重传会产生多版本，切换时刻值得重点关注。"+
 			"无航线记录时 versions=0。",
 		func(ctx context.Context, in missionInput) (missionOutput, error) {
 			cmds, err := deps.Log.Commands(ctx)
@@ -109,7 +108,7 @@ func missionTool(deps Deps) (tool.InvokableTool, error) {
 // ---- 飞行中收到的 MAVLink 命令（get_mavlink_commands） ----
 
 type mavlinkCommandsInput struct {
-	Command string `json:"command,omitempty" jsonschema_description:"按命令名过滤（包含匹配、忽略大小写），如 LAND、RETURN、MISSION、JUMP；缺省返回全部"`
+	Command string `json:"command,omitempty" jsonschema_description:"按命令名过滤（包含匹配），如 LAND；缺省全部"`
 }
 
 // mavlinkCols：t=绝对时刻短格式（日期基准见 timeBase）；cmd/result 缺名时为
@@ -129,10 +128,9 @@ type mavlinkCommandsOutput struct {
 // 命令时刻与执行结果（result）是关键证据。
 func mavlinkCommandsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_mavlink_commands",
-		"获取飞行中收到的 MAVLink 命令流，结果为行数组（cols 标列序，行尾空列省略）："+
-			"t/cmd=时刻与命令名，result=执行结果（ACCEPTED/DENIED/TIMEOUT…），"+
-			"from=255.190 通常为地面站。可用 command 按命令名过滤（如 LAND、RETURN、MISSION）。"+
-			"判断\"是否地面站突然下发命令\"就查这个工具；无记录时 count=0。",
+		"获取飞行中收到的 MAVLink 命令流：t/cmd=时刻与命令名，result=执行结果"+
+			"（ACCEPTED/DENIED/TIMEOUT…），from=255.190 通常为地面站；command 可按命令名"+
+			"过滤。判断\"是否地面站突然下发命令\"查它；无记录时 count=0。",
 		func(ctx context.Context, in mavlinkCommandsInput) (mavlinkCommandsOutput, error) {
 			cmds, err := deps.Log.MAVLinkCommands(ctx)
 			if err != nil {

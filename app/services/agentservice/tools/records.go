@@ -31,10 +31,9 @@ type flightEventsOutput struct {
 // 的高价值线索。
 func flightEventsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_records",
-		"获取飞行过程记录：kind=errors（错误）、events（事件，如解锁/上锁）、"+
-			"modes（模式切换序列）。结果为行数组（cols 标列序）：t=绝对时刻"+
-			"（HH:MM:SS，日期基准见 timeBase，跨天带 MM-DD 前缀）、tSec=相对秒、"+
-			"text=文案；汇总时间线时以绝对时刻为准。",
+		"获取飞行过程记录：kind=errors（错误）/events（事件，如解锁/上锁）/"+
+			"modes（模式切换序列）。行：t=绝对时刻、tSec=相对秒、text=文案；"+
+			"汇总时间线以绝对时刻为准。",
 		func(ctx context.Context, in flightEventsInput) (flightEventsOutput, error) {
 			out := flightEventsOutput{Kind: strings.ToLower(strings.TrimSpace(in.Kind)), TimeBase: deps.Abs.Start(), Cols: recordCols}
 			switch out.Kind {
@@ -116,10 +115,9 @@ type parametersOutput struct {
 // 范围/默认值/枚举。当前值 vs 默认值 是排查配置问题的关键线索。
 func parametersTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_params",
-		"获取参数表（名称→值），可用 name_prefix 前缀过滤（如 ATC_、MOT_、EK3_）。"+
-			"结果为行数组（cols 标列序，行尾空列省略）：name/value 必有；知识库覆盖时附"+
-			" desc/unit/min/max（参考范围）/def（官方默认值，≠当前值说明被改过）。"+
-			"建议先用参数分组工具浏览，再按前缀取值。",
+		"获取参数表（name→value），name_prefix 前缀过滤（如 EK3_）。知识库覆盖时附"+
+			" desc/unit/min/max（参考范围）/def（官方默认值，≠当前值=被改过）。"+
+			"先用参数分组工具浏览，再按前缀取值。",
 		func(ctx context.Context, in parametersInput) (parametersOutput, error) {
 			params, err := deps.Log.Parameters(ctx)
 			if err != nil {
@@ -176,9 +174,8 @@ type paramGroupsOutput struct {
 // 浪费上下文；组带作用与影响说明。
 func paramGroupsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("list_param_groups",
-		"按前缀分组列出当前日志的参数域（如 ATC_=姿态控制、MOT_=动力、EK3_=估计器），"+
-			"行数组（cols 标列序）：前缀、参数个数（按机型过滤后）与该组作用/影响说明。"+
-			"先浏览分组，再用前缀过滤取参数值。",
+		"按前缀列出参数域（如 ATC_=姿态控制、MOT_=动力）：前缀、参数个数（按机型"+
+			"过滤后）与作用/影响说明。先浏览分组，再按前缀取值。",
 		func(ctx context.Context, in paramGroupsInput) (paramGroupsOutput, error) {
 			params, err := deps.Log.Parameters(ctx)
 			if err != nil {
