@@ -56,15 +56,7 @@
       "description": "GPS 原始定位（APM/PX4 共用）：卫星质量、精度、位置与速度",
       "affects": ["position", "navigation", "ekf"],
       "fields": {
-        "FixType": {
-          "description": "定位类型：0=无 1=无锁 2=2D 3=3D 4=DGPS 5=RTK浮点 6=RTK固定",
-          "unit": "enum",
-          "affects": ["position", "navigation"],
-          "analysis": [
-            { "condition": "FixType 掉回 0/1", "meaning": "定位丢失，位置估计退化为航位推算" },
-            { "condition": "FixType=6 突然掉到 3", "meaning": "RTK 失锁，精度从厘米级跌到米级" }
-          ]
-        },
+        "FixType": { "description": "定位类型", "unit": "enum", "values": ["0=无","1=无锁","2=2D","3=3D","4=DGPS","5=RTK浮点","6=RTK固定"], "affects": ["position","navigation"], "analysis": [{"condition":"FixType 掉回 0/1","meaning":"定位丢失，位置估计退化为航位推算"},{"condition":"FixType=6 突然掉到 3","meaning":"RTK 失锁，精度从厘米级跌到米级"}] },
         "SatellitesVisible": {
           "description": "可见卫星数量",
           "unit": "count",
@@ -243,7 +235,7 @@
         },
         "TimeRemaining": { "description": "预计剩余飞行时间（秒，-1=未知）", "unit": "s", "affects": ["duration"] },
         "Temperature": { "description": "电池温度（摄氏度，INT16_MAX=未知）", "unit": "celsius", "affects": ["power"] },
-        "ChargeState": { "description": "充电状态：0=未定义 1=正在充电 8=满电", "unit": "enum", "affects": ["power"] }
+        "ChargeState": { "description": "充电状态", "unit": "enum", "values": ["0=未定义","1=正在充电","8=满电"], "affects": ["power"] }
       }
     },
     "POWER_STATUS": {
@@ -386,14 +378,7 @@
       "description": "EKF 状态报告（ArduPilot 专用；PX4 对应 ESTIMATOR_STATUS）：各轴方差与告警标志",
       "affects": ["ekf", "safety"],
       "fields": {
-        "Flags": {
-          "description": "位标志：0=陀螺偏置 1=速度方差 2=水平位置方差 4=绝对位置方差 8=高度方差 16=罗盘方差（bit 2/4 为 1 时会触发 EKF 失效保护）",
-          "unit": "bitmask",
-          "affects": ["ekf", "safety"],
-          "analysis": [
-            { "condition": "Flags 中速度/位置方差位置 1", "meaning": "EKF 不收敛，可能触发 Land/AltHold 失效保护" }
-          ]
-        },
+        "Flags": { "description": "位标志", "unit": "bitmask", "values": ["0=陀螺偏置","1=速度方差","2=水平位置方差","4=绝对位置方差","8=高度方差","16=罗盘方差（bit 2/4 为 1 时会触发 EKF 失效保护）"], "affects": ["ekf","safety"], "analysis": [{"condition":"Flags 中速度/位置方差位置 1","meaning":"EKF 不收敛，可能触发 Land/AltHold 失效保护"}] },
         "VelocityVariance": {
           "description": "速度方差归一化（0~1，<0.5 正常）",
           "unit": "",

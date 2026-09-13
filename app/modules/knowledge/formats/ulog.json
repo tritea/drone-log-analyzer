@@ -175,15 +175,7 @@
           ],
           "related": ["vehicle_gps_position.eph"]
         },
-        "fix_type": {
-          "description": "定位类型：0=无 1=2D 2=3D 3=DGPS 4=RTK 浮点 5=RTK 固定",
-          "unit": "enum",
-          "affects": ["position"],
-          "analysis": [
-            { "condition": "fix_type 掉回 0/1", "meaning": "定位丢失，位置估计退化为航位推算" },
-            { "condition": "fix_type=5 突然掉到 2", "meaning": "RTK 失锁，精度从厘米级跌到米级" }
-          ]
-        },
+        "fix_type": { "description": "定位类型", "unit": "enum", "values": ["0=无","1=2D","2=3D","3=DGPS","4=RTK 浮点","5=RTK 固定"], "affects": ["position"], "analysis": [{"condition":"fix_type 掉回 0/1","meaning":"定位丢失，位置估计退化为航位推算"},{"condition":"fix_type=5 突然掉到 2","meaning":"RTK 失锁，精度从厘米级跌到米级"}] },
         "eph": {
           "description": "水平位置方差/精度估计（GPS 报告，米）",
           "unit": "m",
@@ -255,7 +247,7 @@
         "time_remaining_s": { "description": "预计剩余时间（秒，<=0=未知）", "unit": "s", "affects": ["duration"] },
         "temperature": { "description": "电池温度（摄氏度，NaN=未知）", "unit": "celsius", "affects": ["power"] },
         "battery_count": { "description": "电池节数/模块数", "unit": "count", "affects": ["power"] },
-        "charge_state": { "description": "充电状态：0=未定义 1=充电 2=满电", "unit": "enum", "affects": ["power"] }
+        "charge_state": { "description": "充电状态", "unit": "enum", "values": ["0=未定义","1=充电","2=满电"], "affects": ["power"] }
       }
     },
     "sensor_baro": {
@@ -364,16 +356,8 @@
       "description": "载具状态：导航状态机、解锁状态与失效保护标志",
       "affects": ["safety", "system"],
       "fields": {
-        "arming_state": {
-          "description": "解锁状态：1=待命 2=已解锁 3=上锁中 4=解锁中（201+ 为错误码）",
-          "unit": "enum",
-          "affects": ["safety"]
-        },
-        "nav_state": {
-          "description": "导航状态（飞行模式）：1=手动 2=高度稳定 3=位置稳定 4=高度控制 5=位置控制 … 12=自动任务 15=RTL（完整枚举量大，PX4 nav_state）",
-          "unit": "enum",
-          "affects": ["navigation"]
-        },
+        "arming_state": { "description": "解锁状态", "unit": "enum", "values": ["1=待命","2=已解锁","3=上锁中","4=解锁中（201+ 为错误码）"], "affects": ["safety"] },
+        "nav_state": { "description": "导航状态（飞行模式）", "unit": "enum", "values": ["1=手动","2=高度稳定","3=位置稳定","4=高度控制","5=位置控制 …","12=自动任务","15=RTL（完整枚举量大，PX4 nav_state）"], "affects": ["navigation"] },
         "failsafe": { "description": "失效保护激活标志（0=无 1=数据链 2=电池 4=GPS 等）", "unit": "bitmask", "affects": ["safety"] },
         "hil_state": { "description": "硬件在环仿真（0=实飞）", "unit": "enum", "affects": ["system"] },
         "nav_ttl": { "description": "数据链失效保护倒计时（秒）", "unit": "s", "affects": ["safety"] }

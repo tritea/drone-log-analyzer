@@ -22,6 +22,7 @@ type AnalysisNote struct {
 type FieldMeta struct {
 	Description string         `json:"description,omitempty"`
 	Unit        string         `json:"unit,omitempty"`
+	Values      []string       `json:"values,omitempty"` // 枚举/位段取值（"4=DGPS" 格式）：不同日志体系刻度不同，必须随字段下发防误读
 	Thresholds  []Threshold    `json:"thresholds,omitempty"`
 	Affects     []string       `json:"affects,omitempty"`
 	Analysis    []AnalysisNote `json:"analysis,omitempty"`
