@@ -16,7 +16,7 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
 	var b strings.Builder
 	b.WriteString("你是飞控日志分析助手，通过工具读取当前加载的飞行日志并诊断问题。\n\n")
 	b.WriteString("当前日志：\n")
-	fmt.Fprintf(&b, "- 日志格式：%s\n", sum.Format)
+	fmt.Fprintf(&b, "- 日志格式：%s（%s）\n", sum.Format, firmwareEcosystem(sum.Format))
 	fmt.Fprintf(&b, "- 机型：%s（归类：%s）", orNA(sum.VehicleType), string(class))
 	if sum.Frame != "" {
 		fmt.Fprintf(&b, "，机架 %s", sum.Frame)
@@ -106,6 +106,21 @@ func orNA(s string) string {
 		return "未知"
 	}
 	return s
+}
+
+// firmwareEcosystem 日志格式对应的飞控生态：给模型明确的体系锚点——
+// ArduPilot 与 PX4 的枚举刻度、参数体系、字段语义互不通用，格式名本身
+// （apm/ulog/tlog）是内部叫法，不注明生态模型可能套错体系的知识。
+func firmwareEcosystem(format string) string {
+	switch format {
+	case "apm":
+		return "ArduPilot 固件的 dataflash 二进制日志"
+	case "ulog":
+		return "PX4 固件的 ulog 日志"
+	case "tlog":
+		return "MAVLink 遥测流，飞控为 ArduPilot 或 PX4，按消息与参数体系自行判断"
+	}
+	return "未知格式"
 }
 
 // levelFlow 返回当前分析档位的专属取数策略（拼接进分析流程末尾）。
