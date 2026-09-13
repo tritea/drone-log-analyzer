@@ -31,11 +31,11 @@ type FieldMeta struct {
 
 // GroupMeta 描述一个日志大类（group，如 GPS/BAT）。
 type GroupMeta struct {
-	Description  string                `json:"description,omitempty"`
-	Affects      []string              `json:"affects,omitempty"`
-	AppliesTo    []string              `json:"appliesTo,omitempty"`
-	VehicleNotes map[string]string     `json:"vehicleNotes,omitempty"` // 机型特殊说明
-	Fields       map[string]FieldMeta  `json:"fields,omitempty"`
+	Description  string               `json:"description,omitempty"`
+	Affects      []string             `json:"affects,omitempty"`
+	AppliesTo    []string             `json:"appliesTo,omitempty"`
+	VehicleNotes map[string]string    `json:"vehicleNotes,omitempty"` // 机型特殊说明
+	Fields       map[string]FieldMeta `json:"fields,omitempty"`
 }
 
 // FormatKB 是一种日志格式的完整知识库（formats/<format>.json 的内存形态）。
@@ -48,14 +48,14 @@ type FormatKB struct {
 // ParamMeta 描述一个飞控参数（由 tools/gen-params.mjs 从官方文档生成，
 // formats/<format>-params.json）。字段名用单字母缩键控制体积。
 type ParamMeta struct {
-	Description string   `json:"d,omitempty"`  // 短述（官方标题）
-	Long        string   `json:"D,omitempty"`  // 长述（截断）
+	Description string   `json:"d,omitempty"` // 短述（官方标题）
+	Long        string   `json:"D,omitempty"` // 长述（截断）
 	Unit        string   `json:"u,omitempty"`
 	RangeMin    *float64 `json:"rmin,omitempty"`
 	RangeMax    *float64 `json:"rmax,omitempty"`
 	Default     *float64 `json:"def,omitempty"` // 官方默认值（仅 PX4 文档提供）
-	Values      []string `json:"v,omitempty"`  // 枚举值/位段："0: 含义"
-	AppliesTo   []string `json:"ap,omitempty"` // 机型类；缺省=全部
+	Values      []string `json:"v,omitempty"`   // 枚举值/位段："0: 含义"
+	AppliesTo   []string `json:"ap,omitempty"`  // 机型类；缺省=全部
 }
 
 // ParamGroupMeta 是参数前缀分组（如 ATC/MOT/EK3）的作用与影响域。

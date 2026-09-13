@@ -89,18 +89,23 @@ func flightEventsTool(deps Deps) (tool.InvokableTool, error) {
 }
 
 type parametersInput struct {
+	Topic      string `json:"topic,omitempty" jsonschema_description:"按问题域取支配参数（position/attitude/altitude/power/battery/vibration/estimator/rc；个别域无清单会报错并列出可选项），与 name_prefix 二选一"`
 	NamePrefix string `json:"name_prefix,omitempty" jsonschema_description:"参数名前缀过滤（区分大小写），缺省返回全部"`
 }
 
-// paramCols：name/value 必有；知识库覆盖时附 desc/unit/min/max（参考范围）/
-// def（官方默认值）/values（枚举）/long（长述，条目多时省略）。分组可由
-// 名字前缀（下划线前首段）推导，不单独占列。
+// paramCols：name/value 必有（value=null=日志未记录该参数，通常=默认值，
+// 参考 def 列）；知识库覆盖时附 desc/unit/min/max（参考范围）/def（官方
+// 默认值）/values（枚举）/long（长述，条目多时省略）。分组可由名字前缀
+// （下划线前首段）推导，不单独占列。
 var paramCols = []string{"name", "value", "desc", "unit", "min", "max", "def", "values", "long"}
 
-// paramMatch 是一条命中参数：名称、当前值与可选的知识库元信息。
+// paramMatch 是一条命中参数：名称、当前值与可选的知识库元信息。inLog=false
+// 表示日志参数表未记录该参数（topic 路径保留链上缺失项，按知识库默认值参考：
+// 支配配置"没改过"本身就是诊断信息；tlog 截获不全时也可能是漏记录）。
 type paramMatch struct {
 	name  string
 	value float64
+	inLog bool
 	pm    *knowledge.ParamMeta
 }
 
@@ -111,36 +116,81 @@ type parametersOutput struct {
 	Rows      [][]any  `json:"rows"`
 }
 
-// parametersTool 返回飞控参数（可前缀过滤），并融合参数知识库：含义/单位/
-// 范围/默认值/枚举。当前值 vs 默认值 是排查配置问题的关键线索。
+// chainMatches 按排查链组装命中参数（topic 路径）：按链序输出；日志未记录
+// 的也保留（inLog=false）。纯函数便于单测。
+func chainMatches(kb *knowledge.ParamsKB, class knowledge.VehicleClass, names []string, logValues map[string]float64) []paramMatch {
+	out := make([]paramMatch, 0, len(names))
+	for _, name := range names {
+		m := paramMatch{name: name}
+		if v, ok := logValues[name]; ok {
+			m.value, m.inLog = v, true
+		}
+		if pm, ok := kb.Lookup(name); ok && knowledge.Applies(pm.AppliesTo, class) {
+			m.pm = &pm
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// paramTopicError 列出该格式有支配参数清单的主题，提示回退前缀过滤。
+type paramTopicError struct{ topics []string }
+
+func (e *paramTopicError) Error() string {
+	sort.Strings(e.topics)
+	return "此格式该主题暂无支配参数清单（有清单的主题：" + strings.Join(e.topics, "/") +
+		"）；请改用 name_prefix 前缀过滤"
+}
+
+// parametersTool 返回飞控参数（topic 按问题域取支配参数 / 前缀过滤），
+// 并融合参数知识库：含义/单位/范围/默认值/枚举。当前值 vs 默认值 是排查
+// 配置问题的关键线索。
 func parametersTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_params",
-		"获取参数表（name→value），name_prefix 前缀过滤（如 EK3_）。知识库覆盖时附"+
-			" desc/unit/min/max（参考范围）/def（官方默认值，≠当前值=被改过）。"+
-			"先用参数分组工具浏览，再按前缀取值。",
+		"获取参数表（name→value）。优先用 topic 按问题域取支配参数（少量关键项，"+
+			"配合主题工具的排查链使用）；name_prefix 前缀过滤（如 EK3_，返回该前缀全部）。"+
+			"知识库覆盖时附 desc/unit/min/max（参考范围）/def（官方默认值，≠当前值=被改过）；"+
+			"value=null=日志未记录（通常=默认值，参考 def）。",
 		func(ctx context.Context, in parametersInput) (parametersOutput, error) {
 			params, err := deps.Log.Parameters(ctx)
 			if err != nil {
 				return parametersOutput{}, err
 			}
-			prefix := in.NamePrefix
 			kb := knowledge.ForParams(deps.Format)
-			matched := make([]paramMatch, 0, len(params))
-			for _, p := range params {
-				if prefix != "" && !strings.HasPrefix(p.Name, prefix) {
-					continue
+			var matched []paramMatch
+			if topic := strings.ToLower(strings.TrimSpace(in.Topic)); topic != "" {
+				chain, ok := knowledge.TopicChainFor(deps.Format, topic)
+				if !ok {
+					return parametersOutput{}, &paramTopicError{topics: knowledge.ChainTopics(deps.Format)}
 				}
-				entry := paramMatch{name: p.Name, value: p.Value}
-				if pm, ok := kb.Lookup(p.Name); ok && knowledge.Applies(pm.AppliesTo, deps.Class) {
-					entry.pm = &pm
+				logValues := make(map[string]float64, len(params))
+				for _, p := range params {
+					logValues[p.Name] = p.Value
 				}
-				matched = append(matched, entry)
+				matched = chainMatches(kb, deps.Class, chain.Params, logValues)
+			} else {
+				prefix := in.NamePrefix
+				matched = make([]paramMatch, 0, len(params))
+				for _, p := range params {
+					if prefix != "" && !strings.HasPrefix(p.Name, prefix) {
+						continue
+					}
+					entry := paramMatch{name: p.Name, value: p.Value, inLog: true}
+					if pm, ok := kb.Lookup(p.Name); ok && knowledge.Applies(pm.AppliesTo, deps.Class) {
+						entry.pm = &pm
+					}
+					matched = append(matched, entry)
+				}
 			}
 			// 精简：条目多时省略 long 长述（token 大头），提示分批取。
 			includeLong := len(matched) <= 40
 			out := parametersOutput{Cols: paramCols, Rows: make([][]any, 0, len(matched))}
 			for _, m := range matched {
-				row := []any{m.name, m.value}
+				var val any
+				if m.inLog {
+					val = m.value
+				}
+				row := []any{m.name, val}
 				if m.pm != nil {
 					row = append(row, m.pm.Description, m.pm.Unit,
 						ptrVal(m.pm.RangeMin), ptrVal(m.pm.RangeMax), ptrVal(m.pm.Default),
