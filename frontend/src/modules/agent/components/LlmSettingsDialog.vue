@@ -15,6 +15,15 @@ const PRESETS: Record<string, string> = {
 
 const agentStore = useAgentStore()
 
+/** 步数配置行：档位 → 表单字段与说明（title + 多行配置）。 */
+const stepFields: { key: keyof typeof form; label: string; hint: string }[] = [
+  { key: 'maxStepsMinimal', label: '极简', hint: '1~2 轮 · 快速扫描，找明显异常' },
+  { key: 'maxStepsFast', label: '快速', hint: '3~5 轮 · 定位主要问题，简单交叉验证' },
+  { key: 'maxStepsStandard', label: '标准', hint: '5~10 轮 · 常规完整分析' },
+  { key: 'maxStepsPro', label: '增强', hint: '10~20 轮 · 多数据源关联分析' },
+  { key: 'maxStepsDeep', label: '深度', hint: '20+ 轮 · 假设验证、反复推理' },
+]
+
 const form = reactive({
   provider: '自定义',
   baseUrl: '',
@@ -99,20 +108,15 @@ function save(): void {
         <span>模型 ID</span>
         <input v-model.trim="form.model" placeholder="glm-4.7 / deepseek-chat / qwen-plus" />
       </label>
-      <div class="field-row">
-        <label class="field">
-          <span>Temperature（0=默认）</span>
-          <input v-model.number="form.temperature" type="number" min="0" max="2" step="0.1" />
-        </label>
-        <label class="field">
-          <span>最大推理步数（极简/快速/标准/增强/深度）</span>
-          <span class="steps-row">
-            <input v-model.number="form.maxStepsMinimal" type="number" min="1" max="50" step="1" title="极简档：快速扫描" />
-            <input v-model.number="form.maxStepsFast" type="number" min="1" max="50" step="1" title="快速档：定位主要问题" />
-            <input v-model.number="form.maxStepsStandard" type="number" min="1" max="50" step="1" title="标准档：常规完整分析" />
-            <input v-model.number="form.maxStepsPro" type="number" min="1" max="50" step="1" title="增强档：多数据源关联" />
-            <input v-model.number="form.maxStepsDeep" type="number" min="1" max="50" step="1" title="深度档：假设验证反复推理" />
-          </span>
+      <label class="field">
+        <span>Temperature（0=默认）</span>
+        <input v-model.number="form.temperature" type="number" min="0" max="2" step="0.1" />
+      </label>
+      <div class="steps-config">
+        <span class="steps-title">最大推理步数（各档独立，超出走强制收尾）</span>
+        <label v-for="f in stepFields" :key="f.key" class="steps-item">
+          <span class="steps-label">{{ f.label }}<em class="steps-hint">{{ f.hint }}</em></span>
+          <input v-model.number="form[f.key]" type="number" min="1" max="50" step="1" :title="f.hint" />
         </label>
       </div>
       <p v-if="error" class="form-error">{{ error }}</p>
@@ -141,7 +145,27 @@ function save(): void {
   background: var(--surface-soft);
 }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.steps-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.steps-config { display: flex; flex-direction: column; gap: 6px; }
+.steps-title { font-size: 12px; color: var(--text2); }
+.steps-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.steps-label { display: flex; align-items: baseline; gap: 8px; }
+.steps-hint { font-style: normal; font-size: 11px; color: var(--text3); }
+.steps-item input {
+  width: 72px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-soft);
+}
 .form-error { color: var(--red); font-size: 12px; margin: 0; }
 .form-note { color: var(--text3); font-size: 12px; margin: 0; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }

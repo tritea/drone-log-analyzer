@@ -54,17 +54,14 @@ function onKeydown(ev: KeyboardEvent): void {
       :disabled="disabled"
       @keydown="onKeydown"
     ></textarea>
-    <div class="chat-input-levels" title="分析深度（影响每轮的查询范围与 token 消耗）">
-      <button
-        v-for="opt in levelOptions"
-        :key="opt.value"
-        :class="['lvl-btn', { active: store.agent.level === opt.value }]"
-        :title="opt.title"
-        type="button"
-        @click="store.agent.level = opt.value"
-      >{{ opt.label }}</button>
-    </div>
     <div class="chat-input-actions">
+      <select
+        v-model="store.agent.level"
+        class="chat-input-level"
+        title="分析深度（影响每轮的查询范围与 token 消耗）"
+      >
+        <option v-for="opt in levelOptions" :key="opt.value" :value="opt.value" :title="opt.title">{{ opt.label }}</option>
+      </select>
       <span v-if="disabled" class="chat-input-hint">{{ disabledHint }}</span>
       <template v-if="streaming">
         <AppButton size="xs" variant="danger" title="停止生成" @click="emit('stop')">停止</AppButton>
@@ -111,28 +108,16 @@ function onKeydown(ev: KeyboardEvent): void {
   justify-content: flex-end;
 }
 .chat-input-hint { margin-right: auto; font-size: 12px; color: var(--text3); }
-.chat-input-levels {
-  display: flex;
-  gap: 4px;
+.chat-input-level {
+  margin-right: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 2px;
-  width: fit-content;
   background: var(--surface-soft);
-}
-.lvl-btn {
-  border: none;
-  border-radius: calc(var(--radius) - 2px);
-  background: transparent;
-  color: var(--text3);
+  color: var(--text);
   font-size: 12px;
-  line-height: 1.4;
-  padding: 2px 10px;
+  padding: 2px 6px;
+  outline: none;
   cursor: pointer;
 }
-.lvl-btn:hover { color: var(--text); }
-.lvl-btn.active {
-  background: var(--blue);
-  color: #fff;
-}
+.chat-input-level:focus { border-color: var(--blue); box-shadow: var(--ring); }
 </style>
