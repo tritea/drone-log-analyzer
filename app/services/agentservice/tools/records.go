@@ -112,28 +112,76 @@ type paramMatch struct {
 }
 
 type parametersOutput struct {
-	Count     int      `json:"count"` // 命中总数（rows 可能被截断）
-	Truncated bool     `json:"truncated,omitempty"`
-	Hint      string   `json:"hint,omitempty"` // topic 路径链上参数缺失时的回退提示
-	Cols      []string `json:"cols"`
-	Rows      [][]any  `json:"rows"`
+	Count      int      `json:"count"` // 命中总数（rows 可能被截断）
+	Truncated  bool     `json:"truncated,omitempty"`
+	Hint       string   `json:"hint,omitempty"`       // topic 路径链上参数缺失时的回退提示
+	GroupRows  [][]any  `json:"groupRows,omitempty"`  // topic 路径同组扫描：[name,value] 行（无知识库描述，宁多勿缺）
+	GroupCount int      `json:"groupCount,omitempty"` // 同组命中总数（groupRows 可能截断）
+	GroupTrunc bool     `json:"groupTrunc,omitempty"`
+	Cols       []string `json:"cols"`
+	Rows       [][]any  `json:"rows"`
 }
 
-// chainMatches 按排查链组装命中参数（topic 路径）：按链序输出；日志未记录
-// 的也保留（inLog=false）。纯函数便于单测。
-func chainMatches(kb *knowledge.ParamsKB, class knowledge.VehicleClass, names []string, logValues map[string]float64) []paramMatch {
-	out := make([]paramMatch, 0, len(names))
+// chainMatches 按排查链组装命中参数（topic 路径）：按链序输出，并与日志
+// 参数表交叉对比。paramsComplete=true（dataflash/ulog：boot 全量落盘/
+// parameters 消息，表即固件全集）时，链上日志未含的参数直接剔除并记名
+// ——全量表里没有=该固件（旧版本）无此参数，发给模型只会误导；=false
+// （tlog 只截获流过的 PARAM_VALUE，缺失含义不明）时保留占位（value=null，
+// 通常=保持默认）。纯函数便于单测。
+func chainMatches(kb *knowledge.ParamsKB, class knowledge.VehicleClass, names []string,
+	logValues map[string]float64, paramsComplete bool) (kept []paramMatch, dropped []string) {
+	kept = make([]paramMatch, 0, len(names))
 	for _, name := range names {
 		m := paramMatch{name: name}
 		if v, ok := logValues[name]; ok {
 			m.value, m.inLog = v, true
+		} else if paramsComplete {
+			dropped = append(dropped, name)
+			continue
 		}
 		if pm, ok := kb.Lookup(name); ok && knowledge.Applies(pm.AppliesTo, class) {
 			m.pm = &pm
 		}
-		out = append(out, m)
+		kept = append(kept, m)
 	}
-	return out
+	return kept, dropped
+}
+
+// familyOf 取参数的"家族"前缀：下划线首段去掉尾部数字（RNGFND1→RNGFND、
+// FLTMODE1→FLTMODE、EK3→EK）——实例号与代际差异都归入同族，topic 的
+// 同组扫描借此覆盖新实例（RNGFND2_*）与旧代命名（EK2_*）。
+func familyOf(name string) string {
+	return strings.TrimRight(knowledge.ParamGroup(name), "0123456789")
+}
+
+// groupScan 扫描日志参数表，返回与链上参数同族（familyOf）的全部参数行
+// [name,value]——不含已入 rows 的链参数；不带知识库描述，宁多勿缺：日志
+// 里有而 knowledge 未覆盖/未描述的域内参数也露出，含义由模型自行判读或
+// 检索。dropped（固件全量表未见被剔除的链参数）的族同样参与：失配固件
+// 里旧代/新名参数仍能露面。超上限截断，total 记全量命中数。纯函数便于单测。
+func groupScan(chain, dropped []string, logValues map[string]float64, listed map[string]bool) ([][]any, int, bool) {
+	families := map[string]bool{}
+	all := append(append([]string(nil), chain...), dropped...)
+	for _, n := range all {
+		families[familyOf(n)] = true
+	}
+	names := make([]string, 0, len(logValues))
+	for n := range logValues {
+		if !listed[n] && families[familyOf(n)] {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	total := len(names)
+	trunc := total > maxParamEntries
+	if trunc {
+		names = names[:maxParamEntries]
+	}
+	rows := make([][]any, 0, len(names))
+	for _, n := range names {
+		rows = append(rows, []any{n, logValues[n]})
+	}
+	return rows, total, trunc
 }
 
 // paramTopicError 列出该格式有支配参数清单的主题，提示回退前缀过滤。
@@ -145,21 +193,33 @@ func (e *paramTopicError) Error() string {
 		"）；请改用 name_prefix 前缀过滤"
 }
 
-// topicHint 在 topic 路径链上参数部分缺失时给出回退提示：个别缺失通常=
-// 保持默认；大量缺失往往是固件参数体系不同（EK2/EK3、参数改名），应改用
-// 前缀过滤拉原始参数自行分析——映射表是快路径，不允许它卡住探索。
-func topicHint(matches []paramMatch) string {
+// topicHint 汇总 topic 路径与日志参数表交叉对比的缺失情况并给出回退引导：
+// dropped（全量表未见）=该固件应无此参数（旧版本/改名），已略去不送；
+// missing（tlog 截获不全）=通常=保持默认值。两种情况都引导暴力搜索兜底
+// ——映射表是快路径，不允许它卡住探索。
+func topicHint(kept []paramMatch, dropped []string) string {
+	var parts []string
+	if len(dropped) > 0 {
+		names := dropped
+		if len(names) > 5 {
+			names = names[:5]
+		}
+		parts = append(parts, fmt.Sprintf("链上 %d 项该固件参数表未含（应为旧版本无此参数，已略）：%s",
+			len(dropped), strings.Join(names, "、")))
+	}
 	missing := 0
-	for _, m := range matches {
+	for _, m := range kept {
 		if !m.inLog {
 			missing++
 		}
 	}
-	if missing == 0 {
+	if missing > 0 {
+		parts = append(parts, fmt.Sprintf("链上 %d/%d 项日志未记录：通常=保持默认值", missing, len(kept)))
+	}
+	if len(parts) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("链上 %d/%d 项日志未记录：通常=保持默认值；若该固件参数体系不同"+
-		"（参数改名/演进），改用 name_search/name_prefix 拉原始参数自行分析", missing, len(matches))
+	return strings.Join(parts, "；") + "；参数体系不符时用 name_search/name_prefix 拉原始参数自行分析"
 }
 
 // parametersTool 返回飞控参数（topic 按问题域取支配参数 / 前缀过滤），
@@ -168,11 +228,14 @@ func topicHint(matches []paramMatch) string {
 func parametersTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_params",
 		"获取参数表（name→value）。优先用 topic 按问题域取支配参数（少量关键项，"+
-			"配合主题工具的排查链使用；结果大量 null=固件参数体系可能不同，改用"+
-			" name_search/name_prefix 拉原始参数自行分析）；name_prefix 前缀过滤"+
-			"（如 EK3_）、name_search 名字子串全局搜索（如 RNGFND），可叠加。知识库"+
-			"覆盖时附 desc/unit/min/max（参考范围）/def（官方默认值，≠当前值=被改过）；"+
-			"value=null=日志未记录（通常=默认值，参考 def）。",
+			"配合主题工具的排查链使用；结果大量 null/条目被略=固件参数体系可能不同，"+
+			"改用 name_search/name_prefix 拉原始参数自行分析），另附 groupRows=与链"+
+			"同组的日志参数全量扫描（仅名称+值，无描述——knowledge 未覆盖的也在，"+
+			"宁多勿缺，含义自行判读/检索）；name_prefix 前缀过滤（如 EK3_）、"+
+			"name_search 名字子串全局搜索（如 RNGFND），可叠加。知识库覆盖时附"+
+			" desc/unit/min/max（参考范围）/def（官方默认值，≠当前值=被改过）；"+
+			"value=null=日志未记录（tlog 截获不全，通常=默认值，参考 def；全量表格式"+
+			"未含的参数不返回，见 hint）。",
 		func(ctx context.Context, in parametersInput) (parametersOutput, error) {
 			params, err := deps.Log.Parameters(ctx)
 			if err != nil {
@@ -180,6 +243,10 @@ func parametersTool(deps Deps) (tool.InvokableTool, error) {
 			}
 			kb := knowledge.ForParams(deps.Format)
 			var matched []paramMatch
+			var dropped []string
+			var groupRows [][]any
+			var groupTotal int
+			var groupTrunc bool
 			if topic := strings.ToLower(strings.TrimSpace(in.Topic)); topic != "" {
 				chain, ok := knowledge.TopicChainFor(deps.Format, topic)
 				if !ok {
@@ -189,7 +256,16 @@ func parametersTool(deps Deps) (tool.InvokableTool, error) {
 				for _, p := range params {
 					logValues[p.Name] = p.Value
 				}
-				matched = chainMatches(kb, deps.Class, chain.Params, logValues)
+				// 交叉对比日志参数表：dataflash/ulog 是全量表（缺=固件无此参数，
+				// 剔除不送）；tlog 只截获流过的 PARAM_VALUE（缺=含义不明，保留 null）。
+				matched, dropped = chainMatches(kb, deps.Class, chain.Params, logValues, deps.Format != "tlog")
+				listed := make(map[string]bool, len(matched))
+				for _, m := range matched {
+					if m.inLog {
+						listed[m.name] = true
+					}
+				}
+				groupRows, groupTotal, groupTrunc = groupScan(chain.Params, dropped, logValues, listed)
 			} else {
 				prefix := in.NamePrefix
 				search := strings.ToLower(strings.TrimSpace(in.NameSearch))
@@ -227,7 +303,8 @@ func parametersTool(deps Deps) (tool.InvokableTool, error) {
 				}
 				out.Rows = append(out.Rows, trimRow(row))
 			}
-			out.Hint = topicHint(matched)
+			out.Hint = topicHint(matched, dropped)
+			out.GroupRows, out.GroupCount, out.GroupTrunc = groupRows, groupTotal, groupTrunc
 			out.Count = len(out.Rows)
 			// 截断：条目多时去掉尾部，提示用更精确的前缀分批取。
 			if len(out.Rows) > maxParamEntries {
