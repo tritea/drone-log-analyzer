@@ -83,18 +83,27 @@ func groupFieldsTool(deps Deps) (tool.InvokableTool, error) {
 					out.VehicleNote = note
 				}
 			}
-			for _, fi := range fields {
-				if !fi.IsNumeric {
-					continue
-				}
-				row := []any{fi.Name, fi.Min, fi.Max, fi.Count}
-				if fm, ok := kb.Field(in.Group, fi.Name); ok && knowledge.Applies(fm.AppliesTo, deps.Class) {
-					row = append(row, fm.Description, fm.Unit,
-						thrRows(fm.Thresholds), strsOrNil(fm.Affects),
-						anaRows(fm.Analysis), strsOrNil(fm.Related))
-				}
-				out.Rows = append(out.Rows, trimRow(row))
-			}
+			out.Rows = append(out.Rows, fieldRows(deps, kb, in.Group, fields, "")...)
 			return out, nil
 		})
+}
+
+// fieldRows 构建一组字段的二级描述行（fieldCols 列序）：实测统计 +
+// 知识库元信息。prefix 控制名字列形态：get_fields 用空（裸字段名），
+// 主题工具用 "GROUP."（拼成与 query_data 取数名一致的 分组.字段）。
+func fieldRows(deps Deps, kb *knowledge.FormatKB, group string, fields []logservice.FieldInfo, prefix string) [][]any {
+	var rows [][]any
+	for _, fi := range fields {
+		if !fi.IsNumeric {
+			continue
+		}
+		row := []any{prefix + fi.Name, fi.Min, fi.Max, fi.Count}
+		if fm, ok := kb.Field(group, fi.Name); ok && knowledge.Applies(fm.AppliesTo, deps.Class) {
+			row = append(row, fm.Description, fm.Unit,
+				thrRows(fm.Thresholds), strsOrNil(fm.Affects),
+				anaRows(fm.Analysis), strsOrNil(fm.Related))
+		}
+		rows = append(rows, trimRow(row))
+	}
+	return rows
 }

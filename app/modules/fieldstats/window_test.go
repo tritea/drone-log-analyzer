@@ -48,6 +48,39 @@ func TestDownsample(t *testing.T) {
 	}
 }
 
+// TestDownsampleLTTBKeepsSpikeAndShape 锁住 LTTB 抽稀的形状/离群点保真：
+// 单样本尖峰造成大三角形面积，天然被选中（桶均值实现会把它稀释掉）。
+func TestDownsampleLTTBKeepsSpikeAndShape(t *testing.T) {
+	vals := make([]float64, 200)
+	for i := range vals {
+		vals[i] = 10
+	}
+	vals[77] = 95 // 单样本尖峰
+	s := series(vals, 10)
+	got := Downsample(s, 20)
+	if got.Len() != 20 {
+		t.Fatalf("len = %d, want 20 (LTTB 输出恰为目标点数)", got.Len())
+	}
+	found := false
+	for _, v := range got.Values {
+		if v == 95 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("spike 95 lost: values=%v", got.Values)
+	}
+	// 首末点必选，时间保持单调。
+	if got.Values[0] != 10 || got.Values[len(got.Values)-1] != 10 {
+		t.Errorf("first/last should be endpoints (10), got %v/%v", got.Values[0], got.Values[len(got.Values)-1])
+	}
+	for i := 1; i < len(got.Times); i++ {
+		if got.Times[i] <= got.Times[i-1] {
+			t.Fatalf("times not monotonic at %d", i)
+		}
+	}
+}
+
 func TestAbnormal(t *testing.T) {
 	// t=0..9，值 [10,10,3,3,10,10,4,10,10,10]：NSats 式低于 5 的两段。
 	s := series([]float64{10, 10, 3, 3, 10, 10, 4, 10, 10, 10}, 1)
