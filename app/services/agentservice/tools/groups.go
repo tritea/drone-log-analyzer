@@ -42,9 +42,11 @@ type groupFieldsInput struct {
 	Group string `json:"group" jsonschema:"required" jsonschema_description:"分组名，如 GPS"`
 }
 
-// fieldCols：name/min/max/n=实测统计；知识库覆盖时附 desc/unit/
-// thr=[级别,op,阈值]行/affects/analysis=[条件,含义]行/related（行尾空列省略）。
-var fieldCols = []string{"name", "min", "max", "n", "desc", "unit", "thr", "affects", "analysis", "related"}
+// fieldCols：name/min/max/n=实测统计；知识库覆盖时附 desc（一句话用途
+// 提示）/unit/thr=[级别,op,阈值]行/affects（相关域，如
+// ["attitude","vibration"]）/related（行尾空列省略）。字段含义与分析
+// 方法模型训练知识已覆盖，知识库只留客观基准（阈值/单位）与最简提示。
+var fieldCols = []string{"name", "min", "max", "n", "desc", "unit", "thr", "affects", "related"}
 
 type groupFieldsOutput struct {
 	Group       string   `json:"group"`
@@ -58,9 +60,9 @@ type groupFieldsOutput struct {
 // 影响域/分析启发式）与实测统计（min/max/count）融合。
 func groupFieldsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_fields",
-		"获取分组内字段清单：name/min/max/n=实测统计；知识库覆盖时附 desc/unit/"+
-			"thr=[级别,op,阈值]行/affects/analysis=[条件,含义]行/related。"+
-			"取数前先调它确认字段名。",
+		"获取分组内字段清单：name/min/max/n=实测统计；知识库覆盖时附 desc"+
+			"（一句话用途）/unit/thr=[级别,op,阈值]行/affects（相关域数组）"+
+			"/related。取数前先调它确认字段名。",
 		func(ctx context.Context, in groupFieldsInput) (groupFieldsOutput, error) {
 			fields, err := deps.Log.Fields(ctx, logservice.FieldsRequest{Type: in.Group})
 			if err != nil {
@@ -92,8 +94,7 @@ func fieldRows(deps Deps, kb *knowledge.FormatKB, group string, fields []logserv
 		row := []any{prefix + fi.Name, fi.Min, fi.Max, fi.Count}
 		if fm, ok := kb.Field(group, fi.Name); ok && knowledge.Applies(fm.AppliesTo, deps.Class) {
 			row = append(row, fm.Description, fm.Unit,
-				thrRows(fm.Thresholds), strsOrNil(fm.Affects),
-				anaRows(fm.Analysis), strsOrNil(fm.Related))
+				thrRows(fm.Thresholds), strsOrNil(fm.Affects), strsOrNil(fm.Related))
 		}
 		rows = append(rows, trimRow(row))
 	}
