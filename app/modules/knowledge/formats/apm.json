@@ -164,7 +164,15 @@
         "ThH": { "description": "估算的悬停油门（0~1）；与实际悬停 ThO 偏差大说明 MOT_THST_HOVER 未校准", "unit": "norm", "affects": ["throttle"] },
         "ABst": { "description": "大角度时的油门提升量", "unit": "norm", "affects": ["throttle"] },
         "DAlt": { "description": "期望高度（米，相对 HOME）", "unit": "m", "affects": ["altitude"] },
-        "Alt": { "description": "实际（EKF）高度（米，相对 HOME）", "unit": "m", "affects": ["altitude"] },
+        "Alt": {
+          "description": "实际（EKF）高度（米，相对 HOME）",
+          "unit": "m",
+          "affects": ["altitude"],
+          "analysis": [
+            { "condition": "排查掉高/高度跳变", "meaning": "先查参数 EK3_SRC1_POSZ 确认高度源（0=气压计 1=测距仪 2=GPS 3=GPS+气压融合），再对照该源原始数据（BARO.Alt / RFND.Dist / GPS.Alt）与 EKF 估计，区分是源跳变还是融合异常" },
+            { "condition": "GPS 高度源且 RTK 状态变化时掉高", "meaning": "RTK Fix→Float 降级使 GPS 垂直精度突变，优先查 GPS.NSats/HDop 与 RTK 状态" }
+          ]
+        },
         "BAlt": {
           "description": "气压计高度（米，相对 HOME；4.x 叫 BAlt，3.x 叫 BarAlt）",
           "unit": "m",

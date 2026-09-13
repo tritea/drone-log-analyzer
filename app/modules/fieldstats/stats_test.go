@@ -96,3 +96,16 @@ func TestPeaks(t *testing.T) {
 		t.Errorf("MaxPeak/At = %v/%v, want 2/3", ps.MaxPeak, ps.MaxPeakAt)
 	}
 }
+
+func TestStatsRMS(t *testing.T) {
+	// 常量序列：rms=|v|；正弦半波近似：rms≈sqrt(mean(v²))。
+	flat := Stats(series([]float64{3, 3, 3}, 1))
+	if flat.Rms != 3 {
+		t.Errorf("flat rms = %v, want 3", flat.Rms)
+	}
+	osc := Stats(series([]float64{0, 2, 0, 2, 0}, 1))
+	want := math.Sqrt(8.0 / 5.0)
+	if math.Abs(osc.Rms-want) > 1e-9 {
+		t.Errorf("osc rms = %v, want %v", osc.Rms, want)
+	}
+}

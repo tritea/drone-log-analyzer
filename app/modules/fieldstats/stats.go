@@ -2,7 +2,7 @@ package fieldstats
 
 import "math"
 
-// BasicStats 是窗口基础统计：最值（含命中时刻）、均值、样本数。
+// BasicStats 是窗口基础统计：最值（含命中时刻）、均值、峰峰值、RMS。
 // 无有效样本时 Ok=false，数值字段无意义。
 type BasicStats struct {
 	Ok     bool    `json:"ok"`
@@ -13,6 +13,7 @@ type BasicStats struct {
 	MaxAt  float64 `json:"maxAt"`
 	Avg    float64 `json:"avg"`
 	P2P    float64 `json:"p2p"`
+	Rms    float64 `json:"rms"` // 均方根：振动/纹波类震荡信号的标准强度度量
 	HasAvg bool    `json:"hasAvg"`
 }
 
@@ -20,7 +21,7 @@ type BasicStats struct {
 func Stats(s Series) BasicStats {
 	var st BasicStats
 	first := true
-	var sum float64
+	var sum, sumSq float64
 	var cnt int
 	for i := 0; i < s.Len(); i++ {
 		v := s.Values[i]
@@ -36,6 +37,7 @@ func Stats(s Series) BasicStats {
 		}
 		first = false
 		sum += v
+		sumSq += v * v
 		cnt++
 	}
 	if first {
@@ -46,6 +48,7 @@ func Stats(s Series) BasicStats {
 	st.Avg = sum / float64(cnt)
 	st.HasAvg = true
 	st.P2P = st.Max - st.Min
+	st.Rms = math.Sqrt(sumSq / float64(cnt))
 	return st
 }
 

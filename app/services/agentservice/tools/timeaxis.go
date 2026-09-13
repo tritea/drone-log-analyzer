@@ -58,4 +58,11 @@ const (
 	maxMavlinkEntries = 200 // get_mavlink_commands 条目上限
 	maxMissionVersion = 12  // get_mission 版本上限
 	maxMissionPoints  = 80  // get_mission 每版航点上限
+	maxTopicFields    = 60  // get_topic_fields 字段数上限
+	maxAbnSegments    = 50  // abnormal 每级段行上限（超出的丢弃，总越限秒仍按全量计）
+	abnMergeGapSecs   = 1.0 // abnormal 相邻段合并间隔（秒）：阈值附近抖动的毛刺段并成一场
+
+	// maxRawRowsPerRound 是一轮（一次 Chat）内全部 raw 查询共享的原始点
+	// 总预算：迭代重发乘法下无上限的原始序列会把上下文放大到百万 token。
+	MaxRawRowsPerRound = 2400
 )
