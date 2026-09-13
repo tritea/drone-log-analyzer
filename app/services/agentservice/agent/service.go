@@ -142,12 +142,16 @@ func (s *service) Chat(ctx context.Context, req agentservice.ChatRequest) (*agen
 	if maxIter <= 0 {
 		maxIter = 10
 	}
-	ag, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+	agentCfg := &adk.ChatModelAgentConfig{
 		Instruction:   buildSystemPrompt(sum, class, level),
 		Model:         cm,
 		ToolsConfig:   adk.ToolsConfig{ToolsNodeConfig: compose.ToolsNodeConfig{Tools: built}},
 		MaxIterations: maxIter,
-	})
+	}
+	// 调用预算提示：模型知道剩余步数，最后一次调用被明确要求直接作答，
+	// 常规轮次不再撞上限触发强制收尾（上限与 forceSummary 仍是硬兜底）。
+	agentCfg.Handlers = append(agentCfg.Handlers, newPacingMiddleware(maxIter))
+	ag, err := adk.NewChatModelAgent(ctx, agentCfg)
 	if err != nil {
 		return nil, err
 	}
