@@ -62,6 +62,6 @@ const (
 	defaultLlmStepsMinimal  = 2  // 极简：快速扫描，找明显异常
 	defaultLlmStepsFast     = 5  // 快速：定位主要问题，简单交叉验证
 	defaultLlmStepsStandard = 10 // 标准：常规完整分析
-	defaultLlmStepsPro      = 20 // 增强：多数据源关联分析
+	defaultLlmStepsPro      = 13 // 增强：多数据源关联分析
 	defaultLlmStepsDeep     = 25 // 深度：假设验证、反复推理
 )

@@ -41,7 +41,7 @@ const defaultLlmConfig = (): LlmConfig => ({
   maxStepsMinimal: 2,
   maxStepsFast: 5,
   maxStepsStandard: 10,
-  maxStepsPro: 20,
+  maxStepsPro: 13,
   maxStepsDeep: 25,
 });
 
@@ -55,7 +55,7 @@ export const useAgentStore = defineStore('agent', () => {
     llm: defaultLlmConfig(),
     llmPath: '',
     settingsOpen: false,
-    /** 分析深度（随每轮 Chat 发送）：fast 少查早停 / standard 问什么答什么 / deep 广域扫描。 */
+    /** 分析深度（随每轮 Chat 发送）：极简/快速/标准/增强/深度 五档。 */
     level: 'standard' as AnalysisLevel,
   });
 

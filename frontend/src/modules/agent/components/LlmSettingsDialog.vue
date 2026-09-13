@@ -33,7 +33,7 @@ const form = reactive({
   maxStepsMinimal: 2,
   maxStepsFast: 5,
   maxStepsStandard: 10,
-  maxStepsPro: 20,
+  maxStepsPro: 13,
   maxStepsDeep: 25,
 })
 
@@ -52,7 +52,7 @@ watch(
     form.maxStepsMinimal = cfg.maxStepsMinimal || 2
     form.maxStepsFast = cfg.maxStepsFast || 5
     form.maxStepsStandard = cfg.maxStepsStandard || 10
-    form.maxStepsPro = cfg.maxStepsPro || 20
+    form.maxStepsPro = cfg.maxStepsPro || 13
     form.maxStepsDeep = cfg.maxStepsDeep || 25
     error.value = ''
   },
