@@ -69,6 +69,9 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
   minAt/maxAt 等相对秒与 raw 点时间，引用时用 timeBase 换算为绝对时刻。
   若日志无 UTC 基准才允许只用相对秒，并明确说明。
 - 阈值判定优先依据字段附带的参考阈值；没有阈值依据时明确说明是推断。
+- 枚举/位段字段一律按字段清单附带的 values 取值解释（各日志体系刻度不同，
+  如 GPS 定位状态同一数字在 dataflash/tlog/ulog 含义不同）——不凭记忆套用
+  其他体系的枚举表。
 - 异常与否要有配置基准：偏差量级须对照该机参数设定的正常容差再下结论——
   配置下属正常的瞬态/噪声不算发现，也不进 incident 块。
 - 结论回答"为什么"：归因到具体环节并给出证据链（配置 → 链路数据 → 异常时刻的

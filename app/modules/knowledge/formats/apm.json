@@ -33,15 +33,7 @@
           ],
           "related": ["GPS.NSats", "GPA.HAcc"]
         },
-        "Status": {
-          "description": "定位状态：0=未连接 1=有信号无锁 2=2D 3=3D 4=DGPS 5=RTK浮点 6=RTK固定 7=静态 8=PPP",
-          "unit": "enum",
-          "affects": ["position", "navigation"],
-          "analysis": [
-            { "condition": "Status 掉回 0/1", "meaning": "定位丢失或降级，高度/速度不可信" },
-            { "condition": "Status=6 且突然掉到 3", "meaning": "RTK 失锁，精度从厘米级跌到米级" }
-          ]
-        },
+        "Status": { "description": "定位状态", "unit": "enum", "values": ["0=未连接","1=有信号无锁","2=2D","3=3D","4=DGPS","5=RTK浮点","6=RTK固定","7=静态","8=PPP"], "affects": ["position","navigation"], "analysis": [{"condition":"Status 掉回 0/1","meaning":"定位丢失或降级，高度/速度不可信"},{"condition":"Status=6 且突然掉到 3","meaning":"RTK 失锁，精度从厘米级跌到米级"}] },
         "Lat": { "description": "纬度（度）", "unit": "deg", "affects": ["position"] },
         "Lng": { "description": "经度（度）", "unit": "deg", "affects": ["position"] },
         "Alt": { "description": "GPS 海拔高度（椭球高，米）", "unit": "m", "affects": ["position"], "related": ["BARO.Alt", "CTUN.BAlt"] },
@@ -674,7 +666,7 @@
             { "condition": "Dist 突跳到极大值或 0", "meaning": "测距仪 glitch：地面反射差或超量程" }
           ]
         },
-        "Stat": { "description": "状态：0=未连接 1=无数据 2=低于量程 3=超量程 4=正常 5=关闭", "unit": "enum" },
+        "Stat": { "description": "状态", "unit": "enum", "values": ["0=未连接","1=无数据","2=低于量程","3=超量程","4=正常","5=关闭"] },
         "Quality": { "description": "信号质量（%）；-1 无效", "unit": "percent" }
       }
     },
@@ -685,14 +677,7 @@
         "ArmState": { "description": "1=已解锁 0=已上锁", "unit": "bool" },
         "ArmChecks": { "description": "解锁时启用的检查位掩码（bit1 BARO bit2 COMPASS bit3 GPS bit4 INS …）", "unit": "bitmask" },
         "Forced": { "description": "1=强制解锁/上锁", "unit": "bool" },
-        "Method": {
-          "description": "触发方式：0=方向舵 1=MAVLink 2=辅助开关；上锁原因还有电池失效(7)/坠机(12)/RTL完成(28)/围栏(15)/失控保护(16) 等",
-          "unit": "enum",
-          "analysis": [
-            { "condition": "上锁 Method=坠机(12)", "meaning": "飞控判定坠机强制上锁——重点排查失控段" },
-            { "condition": "上锁 Method=电池失效(7)", "meaning": "电压/电流触发电池失效保护" }
-          ]
-        }
+        "Method": { "description": "触发方式", "unit": "enum", "values": ["0=方向舵","1=MAVLink","2=辅助开关；上锁原因还有电池失效(7)/坠机(12)/RTL完成(28)/围栏(15)/失控保护(16) 等"], "analysis": [{"condition":"上锁 Method=坠机(12)","meaning":"飞控判定坠机强制上锁——重点排查失控段"},{"condition":"上锁 Method=电池失效(7)","meaning":"电压/电流触发电池失效保护"}] }
       }
     },
     "MOTB": {

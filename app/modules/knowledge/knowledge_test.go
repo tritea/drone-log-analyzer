@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -26,6 +27,32 @@ func TestForFormat(t *testing.T) {
 
 	if got := ForFormat("nope"); len(got.Groups) != 0 {
 		t.Errorf("unknown format should yield empty KB, got %d groups", len(got.Groups))
+	}
+}
+
+// TestEnumValuesCarried GPS 定位状态在各格式使用不同刻度（dataflash 0~8、
+// tlog 0~6、ulog 0~5），枚举取值必须随字段下发（values），否则模型会拿
+// 训练记忆里其他体系的枚举表误读。
+func TestEnumValuesCarried(t *testing.T) {
+	cases := []struct{ format, group, field string }{
+		{"apm", "GPS", "Status"},
+		{"tlog", "GPS_RAW_INT", "FixType"},
+		{"ulog", "vehicle_gps_position", "fix_type"},
+	}
+	for _, c := range cases {
+		fm, ok := ForFormat(c.format).Field(c.group, c.field)
+		if !ok {
+			t.Errorf("%s KB missing %s.%s", c.format, c.group, c.field)
+			continue
+		}
+		if len(fm.Values) < 4 {
+			t.Errorf("%s %s.%s values = %v, want enum scale (>=4 项)", c.format, c.group, c.field, fm.Values)
+		}
+		// 关键锚点：RTK 固定解的数值因格式而异，逐库校验防串。
+		want := map[string]string{"apm": "6=RTK固定", "tlog": "6=RTK固定", "ulog": "5=RTK 固定"}[c.format]
+		if !slices.Contains(fm.Values, want) {
+			t.Errorf("%s %s.%s values 缺 %q（刻度串库）: %v", c.format, c.group, c.field, want, fm.Values)
+		}
 	}
 }
 
