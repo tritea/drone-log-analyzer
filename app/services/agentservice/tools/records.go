@@ -21,7 +21,7 @@ var recordCols = []string{"t", "tSec", "text"}
 
 type flightEventsOutput struct {
 	Kind      string   `json:"kind"`
-	TimeBase  string   `json:"timeBase,omitempty"` // tSec=0 对应的绝对时刻（完整日期，本地时区）
+	TimeBase  string   `json:"timeBase,omitempty"` // tSec=0 对应的绝对时刻（UTC，与界面显示同时区）
 	Count     int      `json:"count"`              // 命中总数（rows 可能被截断）
 	Truncated bool     `json:"truncated,omitempty"`
 	Cols      []string `json:"cols"`

@@ -29,8 +29,8 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
 		fmt.Fprintf(&b, "- 飞行时长：约 %.0f 秒\n", sum.DurationSecs)
 	}
 	if sum.HasUTC {
-		fmt.Fprintf(&b, "- 日志起始时间：%s（本地时区），相对秒 0 对应该时刻\n",
-			time.Unix(sum.StartUnixSecs, 0).Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(&b, "- 日志起始时间：%s（UTC，与界面曲线/时间轴显示同时区；相对秒 0 对应该时刻）\n",
+			time.Unix(sum.StartUnixSecs, 0).UTC().Format("2006-01-02 15:04:05"))
 	}
 
 	b.WriteString(`
@@ -64,9 +64,12 @@ func buildSystemPrompt(sum *logservice.SummaryResponse, class knowledge.VehicleC
 - 用中文回答，用 Markdown 组织排版（小标题、列表、表格、加粗关键数据）。
 - 引用数据时注明字段名；**所有时间一律写绝对时刻**（如 "14:32:05~14:32:18"，
   相对秒最多作括号补充如 "14:32:05（445s）"），正文严禁裸写相对秒（如 1009s）——
-  用户看不懂。工具输出的 t/winT 等时刻列已是绝对时刻（本地时区短格式 HH:MM:SS，
+  用户看不懂。工具输出的 t/winT 等时刻列已是绝对时刻（UTC 短格式 HH:MM:SS，
   完整日期基准见 timeBase，跨天条目自带 MM-DD 前缀），直接引用；行数组中的
   minAt/maxAt 等相对秒与 raw 点时间，引用时用 timeBase 换算为绝对时刻。
+  **时区口径**：全部时刻（工具输出与你的回答）统一为 UTC——与界面曲线/时间轴
+  显示一致，用户给的时刻按 UTC 理解；日志内部时间戳即 UTC、未做时区换算，
+  不要按本地时区二次换算，也不存在"与 GPS 时间对不上"的问题。
   若日志无 UTC 基准才允许只用相对秒，并明确说明。
 - 阈值判定优先依据字段附带的参考阈值；没有阈值依据时明确说明是推断。
 - 枚举/位段字段一律按字段清单附带的 values 取值解释（各日志体系刻度不同，

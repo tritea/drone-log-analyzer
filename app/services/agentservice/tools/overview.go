@@ -19,8 +19,8 @@ type overviewOutput struct {
 	HardwareType    string  `json:"hardwareType,omitempty"`
 	Filename        string  `json:"filename,omitempty"`
 	DurationSecs    float64 `json:"durationSecs,omitempty"`
-	StartTime       string  `json:"startTime,omitempty"` // 日志起点（本地时区；空=无 UTC 基准）
-	EndTime         string  `json:"endTime,omitempty"`   // 日志终点（本地时区）
+	StartTime       string  `json:"startTime,omitempty"` // 日志起点（UTC；空=无 UTC 基准）
+	EndTime         string  `json:"endTime,omitempty"`   // 日志终点（UTC）
 	GroupCount      int     `json:"groupCount"`          // 日志内的数据 group 数
 	ParameterCount  int     `json:"parameterCount"`
 	ErrorCount      int     `json:"errorCount"`

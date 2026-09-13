@@ -6,7 +6,7 @@ import (
 )
 
 func TestAtShort(t *testing.T) {
-	base := time.Date(2024, 5, 1, 10, 0, 0, 0, time.Local)
+	base := time.Date(2024, 5, 1, 10, 0, 0, 0, time.UTC)
 	abs := &AbsTime{StartUnix: base.Unix()}
 
 	cases := []struct {
@@ -56,7 +56,8 @@ func TestRelSec(t *testing.T) {
 	}
 
 	// 端到端：tlog 域的相对秒渲染回正确当天时刻，而非跨天幻影日期。
-	base := time.Date(2026, 9, 8, 14, 40, 0, 0, time.Local)
+	// 基准用 UTC 构造（渲染口径即 UTC，与界面显示一致，且不依赖机器时区）。
+	base := time.Date(2026, 9, 8, 14, 40, 0, 0, time.UTC)
 	abs := &AbsTime{StartUnix: base.Unix()}
 	if got := abs.AtShort(relSec(float64(base.UnixMilli()), float64(base.UnixMilli())+445216)); got != "14:47:25" {
 		t.Errorf("AtShort(relSec) = %q, want 14:47:25（14:40:00+445.216s）", got)
