@@ -18,12 +18,9 @@ import (
 // 分组/字段工具。
 func topicTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_topic_fields",
-		"按主题一次拿到常用字段清单（含含义/单位/阈值/实测统计）与该域的排查链"+
-			"（params=应先定位的支配参数，guide=确认配置→沿链路取数→检查外部输入"+
-			"的步骤），name 列可直接用于 query_data 取数。topic 可选：position(位置/GPS)、"+
-			"attitude(姿态)、altitude(高度)、power(动力/电机)、battery(电池)、"+
-			"vibration(振动)、estimator(估计器/EKF)、rc(遥控/输入)。诊断问题优先用它；"+
-			"未覆盖的领域再用分组/字段工具。",
+		"按主题一次拿到该域字段清单（含义/单位/阈值/实测统计，name 列可直接用于"+
+			" query_data）与排查链（params=应先定位的支配参数，guide=确认配置→沿链路"+
+			"取数→检查外部输入的步骤）。诊断优先用它，未覆盖领域再用分组/字段工具。",
 		func(ctx context.Context, in topicInput) (topicOutput, error) {
 			topic := strings.ToLower(strings.TrimSpace(in.Topic))
 			groups, ok := knowledge.TopicGroups(deps.Format)[topic]

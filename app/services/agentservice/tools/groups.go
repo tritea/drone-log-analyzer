@@ -24,8 +24,7 @@ type listGroupsOutput struct {
 // 这样 AI 不会漏掉可用数据。
 func listGroupsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("list_groups",
-		"列出当前日志里实际存在的数据分组（如 GPS/BAT/CTUN），行数组（cols 标列序）："+
-			"名称、样本数、字段数，及知识库的分组用途与影响说明（空=未覆盖）。",
+		"列出日志里实际存在的数据分组：名称、样本数、字段数与用途/影响说明（空=未覆盖）。",
 		func(ctx context.Context, _ listGroupsInput) (listGroupsOutput, error) {
 			types, err := deps.Log.MessageTypes(ctx)
 			if err != nil {
@@ -46,7 +45,7 @@ func listGroupsTool(deps Deps) (tool.InvokableTool, error) {
 }
 
 type groupFieldsInput struct {
-	Group string `json:"group" jsonschema:"required" jsonschema_description:"分组名，如 GPS、BAT、CTUN"`
+	Group string `json:"group" jsonschema:"required" jsonschema_description:"分组名，如 GPS"`
 }
 
 // fieldCols：name/min/max/n=实测统计；知识库覆盖时附 desc/unit/
@@ -65,10 +64,9 @@ type groupFieldsOutput struct {
 // 影响域/分析启发式）与实测统计（min/max/count）融合。
 func groupFieldsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_fields",
-		"获取某个分组内的字段清单，行数组（cols 标列序，行尾空列省略）："+
-			"name/min/max/n=实测统计；知识库覆盖时附 desc/unit/thr=[级别,op,阈值]行/"+
-			"affects/analysis=[条件,含义]行/related（无附加列=知识库未覆盖）。"+
-			"按 分组.字段 取数（如 GPS.NSats）前先调它确认字段名。",
+		"获取分组内字段清单：name/min/max/n=实测统计；知识库覆盖时附 desc/unit/"+
+			"thr=[级别,op,阈值]行/affects/analysis=[条件,含义]行/related。"+
+			"取数前先调它确认字段名。",
 		func(ctx context.Context, in groupFieldsInput) (groupFieldsOutput, error) {
 			fields, err := deps.Log.Fields(ctx, logservice.FieldsRequest{Type: in.Group})
 			if err != nil {

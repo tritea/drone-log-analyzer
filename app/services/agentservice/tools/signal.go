@@ -22,16 +22,16 @@ const (
 )
 
 type signalQuery struct {
-	Name      string   `json:"name" jsonschema:"required" jsonschema_description:"字段全名 GROUP.Field，如 GPS.NSats；可写多个（逗号/空格分隔），共享本条的操作与时间窗"`
-	StartSec  *float64 `json:"start_sec,omitempty" jsonschema_description:"窗口起点（秒，相对日志起点），缺省=从头"`
-	EndSec    *float64 `json:"end_sec,omitempty" jsonschema_description:"窗口终点（秒），缺省=到尾"`
+	Name      string   `json:"name" jsonschema:"required" jsonschema_description:"分组.字段，如 GPS.NSats；逗号分隔多个共享本条操作与窗口"`
+	StartSec  *float64 `json:"start_sec,omitempty" jsonschema_description:"窗口起点秒（相对起点），缺省从头"`
+	EndSec    *float64 `json:"end_sec,omitempty" jsonschema_description:"窗口终点秒，缺省到尾"`
 	Operation string   `json:"operation" jsonschema:"required" jsonschema_description:"raw/min/max/avg/minmax/p2p/derivative/trend/peaks/abnormal"`
-	Threshold *float64 `json:"threshold,omitempty" jsonschema_description:"abnormal 的显式阈值；缺省用知识库分级阈值"`
-	MaxPoints int      `json:"max_points,omitempty" jsonschema_description:"raw 的降采样点数上限，默认300"`
+	Threshold *float64 `json:"threshold,omitempty" jsonschema_description:"abnormal 显式阈值，缺省用知识库阈值"`
+	MaxPoints int      `json:"max_points,omitempty" jsonschema_description:"raw 点数上限，默认300"`
 }
 
 type signalInput struct {
-	Queries []signalQuery `json:"queries" jsonschema:"required" jsonschema_description:"批量查询，一次返回全部结果"`
+	Queries []signalQuery `json:"queries" jsonschema:"required" jsonschema_description:"批量查询列表"`
 }
 
 // queryResult 各操作的载荷都是定长数组（列序见工具描述），绝对时刻为短格式
@@ -152,25 +152,19 @@ func dedupeQueries(in []signalQuery) (kept []signalQuery, dropped int) {
 // 默认返回统计结果而非原始序列（raw 也会降采样），控制上下文体积。
 func querySignalTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("query_data",
-		"按 分组.字段（如 GPS.NSats）批量查询时间窗内的数据，queries 支持一次"+
-			"批量查多个字段/指标（优先合并，别逐个调用；重复项会被去重）；name 也可"+
-			"一次写多个字段（逗号/空格分隔，共享本条操作与窗口）。operation 可选："+
-			"raw(原始点,超量自动抽稀为min/max包络保峰值,res=平均点距秒数)/min/max/avg/"+
-			"minmax/p2p(峰峰值)/derivative(变化率)/trend(趋势)/peaks(峰值检测)/"+
-			"abnormal(越限段,缺省按参考阈值)。"+
-			"时间单位秒、相对日志起点；win/winT=实际命中窗口首末（相对秒/绝对时刻）；"+
-			"pts 中连续同值压缩为 [t0,值,t1]（该值保持到 t1）。"+
-			"高频震荡信号（振动/电流纹波等）拉原始波形读不出信息，用 minmax（含 rms 强度）"+
-			"与 abnormal 判断；大跨度窗口先用 minmax/peaks/abnormal 定位时段，再缩窗拉 raw。"+
-			"各操作载荷为定长数组（stats 是 min/max/avg/minmax/p2p 的载荷名，不是操作名）："+
+		"批量查询字段数据。name=分组.字段（如 GPS.NSats，可逗号分隔多个共享本条操作与窗口），"+
+			"优先合并进一次批量、勿逐个调用（重复自动去重）。operation："+
+			"raw(原始点,超量抽稀保峰值,res=点距秒)/min/max/avg/minmax/p2p/derivative/trend/"+
+			"peaks/abnormal(越限段,缺省按参考阈值)。震荡信号（振动/纹波）勿拉 raw，用 minmax/"+
+			"abnormal；大跨度先统计定位时段，再缩窗拉 raw。载荷列序（stats 是统计载荷名非操作名）："+
 			"stats=[ok,n,min,minAt,max,maxAt,avg,p2p,rms,minT,maxT]、"+
 			"rate=[ok,maxRate,maxRateAt,avgRate,n,maxRateT]、"+
 			"trend=[ok,slope,dir,first,last,change,dur]、"+
 			"peaks=[ok,n,maxPeak,maxPeakAt,prominence,maxPeakT]、"+
-			"abn=每级[级别,条件,段行,总越限秒]（段行=[t0,t1,t0T,t1T,worst,extent]，相邻段已合并、"+
-			"每级至多50段，段行数少于实际时用总越限秒判断严重度；段为 null=该级无越限）。"+
-			"T 后缀=绝对时刻，At 结尾=相对秒；stats/rate 的 ok=false 时载荷仅为 [false]。"+
-			"不确定字段名先查字段清单。",
+			"abn=每级[级别,条件,段行,总越限秒]（段行=[t0,t1,t0T,t1T,worst,extent]，至多50段）。"+
+			"win/winT=命中窗口首末；pts 连续同值压缩为 [t0,值,t1]；"+
+			"T 后缀=绝对时刻，At 结尾=相对秒；ok=false 时载荷仅为 [false]。"+
+			"字段名不确定先查字段清单。",
 		func(ctx context.Context, in signalInput) (signalOutput, error) {
 			queries, dedup := dedupeQueries(expandQueries(in.Queries))
 			results := make([]queryResult, 0, len(queries))
