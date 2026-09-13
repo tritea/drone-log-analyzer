@@ -50,6 +50,8 @@ export interface LlmConfig {
   maxStepsStandard: number;
   maxStepsPro: number;
   maxStepsDeep: number;
+  /** 关闭轮内压缩（默认开启：重发旧工具结果时裁批量数据保统计元数据）。 */
+  disableInRoundDiet?: boolean;
 }
 
 export interface LlmConfigResponse {

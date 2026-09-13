@@ -34,7 +34,11 @@ func (s *service) forceSummary(ctx context.Context, cfg *appmodel.LlmConfig, sys
 	if err != nil {
 		return r, ""
 	}
-	input := append(append([]*schema.Message(nil), round...), schema.UserMessage(forceSummaryPrompt))
+	roundIn := round
+	if !cfg.DisableInRoundDiet {
+		roundIn = dietAgedToolMsgs(round) // 收尾调用同样只重发摘录，省一次全量
+	}
+	input := append(append([]*schema.Message(nil), roundIn...), schema.UserMessage(forceSummaryPrompt))
 	iter := ag.Run(ctx, &adk.AgentInput{Messages: input})
 	for {
 		ev, ok := iter.Next()
