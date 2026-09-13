@@ -55,13 +55,12 @@ function onKeydown(ev: KeyboardEvent): void {
       @keydown="onKeydown"
     ></textarea>
     <div class="chat-input-actions">
-      <select
-        v-model="store.agent.level"
-        class="chat-input-level"
-        title="分析深度（影响每轮的查询范围与 token 消耗）"
-      >
-        <option v-for="opt in levelOptions" :key="opt.value" :value="opt.value" :title="opt.title">{{ opt.label }}</option>
-      </select>
+      <div class="chat-input-levels" title="分析深度：影响每轮的查询范围与 token 消耗">
+        <span class="level-label">分析深度</span>
+        <select v-model="store.agent.level" class="chat-input-level">
+          <option v-for="opt in levelOptions" :key="opt.value" :value="opt.value" :title="opt.title">{{ opt.label }}</option>
+        </select>
+      </div>
       <span v-if="disabled" class="chat-input-hint">{{ disabledHint }}</span>
       <template v-if="streaming">
         <AppButton size="xs" variant="danger" title="停止生成" @click="emit('stop')">停止</AppButton>
@@ -108,8 +107,14 @@ function onKeydown(ev: KeyboardEvent): void {
   justify-content: flex-end;
 }
 .chat-input-hint { margin-right: auto; font-size: 12px; color: var(--text3); }
-.chat-input-level {
+.chat-input-levels {
   margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.level-label { font-size: 12px; color: var(--text3); }
+.chat-input-level {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-soft);
