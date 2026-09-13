@@ -1276,6 +1276,7 @@ export namespace model {
 	    maxStepsStandard: number;
 	    maxStepsPro: number;
 	    maxStepsDeep: number;
+	    disableInRoundDiet?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new LlmConfig(source);
@@ -1293,6 +1294,7 @@ export namespace model {
 	        this.maxStepsStandard = source["maxStepsStandard"];
 	        this.maxStepsPro = source["maxStepsPro"];
 	        this.maxStepsDeep = source["maxStepsDeep"];
+	        this.disableInRoundDiet = source["disableInRoundDiet"];
 	    }
 	}
 
