@@ -23,15 +23,27 @@ async function scrollToBottom(): Promise<void> {
   if (el) el.scrollTop = el.scrollHeight
 }
 
-/** 本轮已运行秒数：长时间无输出时让用户确认仍在工作。 */
+/** 本轮已运行秒数：长时间无输出时让用户确认仍在工作。用起始时间戳差值
+ * 重算而非累加——webview 窗口被遮挡时定时器会被系统节流（每分钟一醒），
+ * 累加会永久丢失错过的增量导致计数卡住，差值重算在节流恢复后自愈。 */
 const elapsed = ref(0)
 let timer: number | null = null
+let startedAt = 0
+
+function refreshElapsed(): void {
+  elapsed.value = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+}
+
+function onVisibilityChange(): void {
+  if (!document.hidden) refreshElapsed()
+}
 
 function stopTimer(): void {
   if (timer !== null) {
     window.clearInterval(timer)
     timer = null
   }
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 }
 
 watch(
@@ -39,10 +51,10 @@ watch(
   (active) => {
     stopTimer()
     if (active) {
+      startedAt = Date.now()
       elapsed.value = 0
-      timer = window.setInterval(() => {
-        elapsed.value += 1
-      }, 1000)
+      document.addEventListener('visibilitychange', onVisibilityChange)
+      timer = window.setInterval(refreshElapsed, 1000)
     }
   },
   { immediate: true },

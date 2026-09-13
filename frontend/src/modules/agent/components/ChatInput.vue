@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import AppButton from '@/modules/shared/components/AppButton.vue'
+import { useAgentStore } from '../store/agent-store'
+import type { AnalysisLevel } from '@/services/agent'
 
 const props = defineProps<{
   streaming: boolean
@@ -12,6 +14,17 @@ const emit = defineEmits<{
   (e: 'send', text: string): void
   (e: 'stop'): void
 }>()
+
+const store = useAgentStore()
+
+/** 分析深度五档（一行分段选择）：决定后端的取数策略与迭代上限。 */
+const levelOptions: { value: AnalysisLevel; label: string; title: string }[] = [
+  { value: 'minimal', label: '极简', title: '1~2 轮：快速扫描，找到明显异常' },
+  { value: 'fast', label: '快速', title: '3~5 轮：定位主要问题，简单交叉验证' },
+  { value: 'standard', label: '标准', title: '5~10 轮：常规完整分析' },
+  { value: 'pro', label: '增强', title: '10~20 轮：多数据源关联分析' },
+  { value: 'deep', label: '深度', title: '20+ 轮：假设验证、反复推理' },
+]
 
 const text = ref('')
 
@@ -41,6 +54,16 @@ function onKeydown(ev: KeyboardEvent): void {
       :disabled="disabled"
       @keydown="onKeydown"
     ></textarea>
+    <div class="chat-input-levels" title="分析深度（影响每轮的查询范围与 token 消耗）">
+      <button
+        v-for="opt in levelOptions"
+        :key="opt.value"
+        :class="['lvl-btn', { active: store.agent.level === opt.value }]"
+        :title="opt.title"
+        type="button"
+        @click="store.agent.level = opt.value"
+      >{{ opt.label }}</button>
+    </div>
     <div class="chat-input-actions">
       <span v-if="disabled" class="chat-input-hint">{{ disabledHint }}</span>
       <template v-if="streaming">
@@ -88,4 +111,28 @@ function onKeydown(ev: KeyboardEvent): void {
   justify-content: flex-end;
 }
 .chat-input-hint { margin-right: auto; font-size: 12px; color: var(--text3); }
+.chat-input-levels {
+  display: flex;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  width: fit-content;
+  background: var(--surface-soft);
+}
+.lvl-btn {
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--text3);
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.lvl-btn:hover { color: var(--text); }
+.lvl-btn.active {
+  background: var(--blue);
+  color: #fff;
+}
 </style>

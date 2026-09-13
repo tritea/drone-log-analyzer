@@ -119,6 +119,7 @@ export namespace agentservice {
 	
 	export class ChatRequest {
 	    message: string;
+	    level?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatRequest(source);
@@ -127,6 +128,7 @@ export namespace agentservice {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.message = source["message"];
+	        this.level = source["level"];
 	    }
 	}
 	export class ChatResponse {
@@ -1269,7 +1271,11 @@ export namespace model {
 	    apiKey: string;
 	    model: string;
 	    temperature: number;
-	    maxSteps: number;
+	    maxStepsMinimal: number;
+	    maxStepsFast: number;
+	    maxStepsStandard: number;
+	    maxStepsPro: number;
+	    maxStepsDeep: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new LlmConfig(source);
@@ -1282,7 +1288,11 @@ export namespace model {
 	        this.apiKey = source["apiKey"];
 	        this.model = source["model"];
 	        this.temperature = source["temperature"];
-	        this.maxSteps = source["maxSteps"];
+	        this.maxStepsMinimal = source["maxStepsMinimal"];
+	        this.maxStepsFast = source["maxStepsFast"];
+	        this.maxStepsStandard = source["maxStepsStandard"];
+	        this.maxStepsPro = source["maxStepsPro"];
+	        this.maxStepsDeep = source["maxStepsDeep"];
 	    }
 	}
 

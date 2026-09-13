@@ -1,5 +1,8 @@
 /** Agent 服务的 DTO 镜像（对齐后端 agentservice/model.go 与 app/model/llm.go）。 */
 
+/** 分析深度五档：极简(1~2轮)/快速(3~5轮)/标准(5~10轮)/增强(10~20轮)/深度(20+轮)。 */
+export type AnalysisLevel = 'minimal' | 'fast' | 'standard' | 'pro' | 'deep';
+
 export interface ToolCallTrace {
   tool: string;
   args?: Record<string, unknown>;
@@ -41,7 +44,12 @@ export interface LlmConfig {
   apiKey: string;
   model: string;
   temperature: number;
-  maxSteps: number;
+  /** ReAct 迭代上限按分析档位配置（极简/快速/标准/增强/深度）。 */
+  maxStepsMinimal: number;
+  maxStepsFast: number;
+  maxStepsStandard: number;
+  maxStepsPro: number;
+  maxStepsDeep: number;
 }
 
 export interface LlmConfigResponse {
