@@ -14,8 +14,9 @@ type listGroupsInput struct {
 	MinSamples int `json:"min_samples,omitempty" jsonschema_description:"只列样本数≥该值的分组（tlog 消息类型极多，用它滤掉低频类型），缺省=全部"`
 }
 
-// groupCols：desc/affects 来自知识库（空=未覆盖）。
-var groupCols = []string{"name", "samples", "fields", "desc", "affects"}
+// groupCols：索引菜单只列身份与规模——分组用途/影响说明走 get_fields
+// （选中组后必经的一步），避免浏览阶段全量倒知识库描述。
+var groupCols = []string{"name", "samples", "fields"}
 
 type listGroupsOutput struct {
 	Count     int      `json:"count"` // 命中总数（rows 可能被截断）
@@ -48,27 +49,22 @@ func rankGroups(rows [][]any, minSamples int) ([][]any, int, bool) {
 	return filtered, total, trunc
 }
 
-// listGroupsTool 列出当前日志实际存在的 group，左连接知识库描述。
-// 无样本的类型不列；按样本数降序、超上限截断（count 记全量）。
+// listGroupsTool 列出当前日志实际存在的 group（索引菜单）。无样本的类型
+// 不列；按样本数降序、超上限截断（count 记全量）。分组的用途描述与字段
+// 详情由 get_fields 提供——主题工具未覆盖的领域用它兜底浏览。
 func listGroupsTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("list_groups",
-		"列出日志里实际存在的数据分组：名称、样本数、字段数与用途/影响说明"+
-			"（按样本数降序，超 200 截断；min_samples 可过滤低频类型）。知识库"+
-			"未覆盖的分组描述留空。",
+		"列出日志里实际存在的数据分组索引（名称/样本数/字段数；按样本数降序，"+
+			"超 200 截断，min_samples 可过滤低频类型）。分组的用途说明与字段清单"+
+			"用 get_fields 查看；常见问题域优先用主题工具直达。",
 		func(ctx context.Context, in listGroupsInput) (listGroupsOutput, error) {
 			types, err := deps.Log.MessageTypes(ctx)
 			if err != nil {
 				return listGroupsOutput{}, err
 			}
-			kb := knowledge.ForFormat(deps.Format)
 			rows := make([][]any, 0, len(types))
 			for _, ti := range types {
-				desc, affects := "", any(nil)
-				if gm := knowledge.FilterGroup(kb.Group(ti.Name), deps.Class); gm != nil {
-					desc = gm.Description
-					affects = strsOrNil(gm.Affects)
-				}
-				rows = append(rows, trimRow([]any{ti.Name, ti.Count, len(ti.Fields), desc, affects}))
+				rows = append(rows, []any{ti.Name, ti.Count, len(ti.Fields)})
 			}
 			kept, total, trunc := rankGroups(rows, in.MinSamples)
 			return listGroupsOutput{Count: total, Truncated: trunc, Cols: groupCols, Rows: kept}, nil
