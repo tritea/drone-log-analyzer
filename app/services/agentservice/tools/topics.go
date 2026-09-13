@@ -19,8 +19,9 @@ import (
 func topicTool(deps Deps) (tool.InvokableTool, error) {
 	return infer("get_topic_fields",
 		"按主题一次拿到该域字段清单（含义/单位/阈值/实测统计，name 列可直接用于"+
-			" query_data）与排查链（params=应先定位的支配参数，guide=确认配置→沿链路"+
-			"取数→检查外部输入的步骤）。诊断优先用它，未覆盖领域再用分组/字段工具。",
+			" query_data）与排查链（params=应先定位的支配参数，get_params 传同 topic"+
+			"即可直取；guide=确认配置→沿链路取数→检查外部输入的步骤）。诊断优先用"+
+			"它，未覆盖领域再用分组/字段工具。",
 		func(ctx context.Context, in topicInput) (topicOutput, error) {
 			topic := strings.ToLower(strings.TrimSpace(in.Topic))
 			groups, ok := knowledge.TopicGroups(deps.Format)[topic]
