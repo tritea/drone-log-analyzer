@@ -73,6 +73,9 @@ export function createChartLifecycle(
       },
       formatX: (ms) => formatTime(ms, false),
     });
+    // 框选初始态跟 ui.shiftZoomActive（默认关：拖拽=平移）；cfg.rectZoom
+    // 只是能力开关，构造器不再默认激活。
+    runtime.mainChart.setRectZoomActive(useUiStore().ui.shiftZoomActive);
     renderDataset();
   }
 

@@ -19,6 +19,8 @@ export default {
     },
     togglesBtn: 'Toggles',
     togglesTitle: 'Current view toggles',
+    rectZoomTitle: 'Drag a box to zoom in (equivalent to holding Shift)',
+    resetZoomTitle: 'Reset zoom to the full range',
     agentBtn: 'AI Analysis',
     agentTitle: 'AI log analysis',
     recordsBtn: 'Records',

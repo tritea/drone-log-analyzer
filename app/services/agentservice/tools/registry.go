@@ -70,6 +70,17 @@ func Build(deps Deps) ([]tool.BaseTool, error) {
 }
 
 // infer 是 utils.InferTool 的薄封装，统一 import 与签名。
+// 工具执行错误不作为 Go error 上抛：eino adk 会把 ToolsNode 错误当流
+// 错误终结整轮（service.go 的 ev.Err 分支），模型永远看不到错误文本、
+// 无从自纠。统一转成 {"error": "..."} 结果载荷回传，让 ReAct 循环读
+// 到错误后修正参数重试（如分组名不对→改调 list_groups 核对）。
 func infer[T, D any](name, desc string, fn func(ctx context.Context, in T) (D, error)) (tool.InvokableTool, error) {
-	return utils.InferTool(name, desc, fn)
+	wrapped := func(ctx context.Context, in T) (any, error) {
+		out, err := fn(ctx, in)
+		if err != nil {
+			return map[string]any{"error": err.Error()}, nil
+		}
+		return out, nil
+	}
+	return utils.InferTool(name, desc, wrapped)
 }

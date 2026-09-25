@@ -19,6 +19,8 @@ export default {
     },
     togglesBtn: '开关',
     togglesTitle: '当前视图开关',
+    rectZoomTitle: '拖拽框选放大曲线（等效按住 Shift）',
+    resetZoomTitle: '重置缩放到全程视图',
     agentBtn: 'AI 分析',
     agentTitle: 'AI 日志分析',
     recordsBtn: '记录',

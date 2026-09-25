@@ -33,6 +33,8 @@ defineProps<{ name: string; size?: number }>()
     <template v-else-if="name === 'map-pin'"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></template>
     <template v-else-if="name === 'move'"><polyline points="5 9 2 12 5 15" /><polyline points="9 5 12 2 15 5" /><polyline points="15 19 12 22 9 19" /><polyline points="19 9 22 12 19 15" /><line x1="2" y1="12" x2="22" y2="12" /><line x1="12" y1="2" x2="12" y2="22" /></template>
     <template v-else-if="name === 'grid'"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></template>
+    <template v-else-if="name === 'rect-zoom'"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="4 3" /><line x1="12" y1="1.5" x2="12" y2="6.5" /><line x1="1.5" y1="12" x2="6.5" y2="12" /></template>
+    <template v-else-if="name === 'reset'"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8" /><polyline points="3 3 3 8 8 8" /></template>
   </svg>
 </template>
 

@@ -9,7 +9,8 @@ export const useUiStore = defineStore('ui', () => {
     simpleFieldFilter: '',
     dragOver: false,
     dragDepth: 0,
-    shiftZoomActive: true,
+    // 框选默认关：拖拽=平移（Shift 按住/工具栏开关启用框选）。
+    shiftZoomActive: false,
     shiftZoomActivatedByKey: false,
     toast: null,
     recordOpen: false,

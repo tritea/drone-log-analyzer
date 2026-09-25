@@ -39,7 +39,12 @@ const { openLogFile } = logStore
 
 const chartStore = useAnalysisStore()
 const { chart, hiddenCurveCount } = storeToRefs(chartStore)
-const { applyTooltipToggle, applyTagToggles, formatDuration } = chartStore
+const { applyTooltipToggle, applyTagToggles, formatDuration, setRectZoomActive, resetZoom } = chartStore
+
+/** 框选开关：激活后左键拖拽=框选放大，否则拖拽=平移（右键恒为重置）。 */
+function toggleRectZoom(): void {
+  setRectZoomActive(!ui.value.shiftZoomActive)
+}
 
 const mapStore = useMapStateStore()
 const { map } = storeToRefs(mapStore)
@@ -141,6 +146,10 @@ watch(() => ui.value.mainView, () => {
     <div class="topbar-spacer"></div>
 
     <div class="chart-controls">
+      <template v-if="ui.mainView === 'chart'">
+        <AppButton size="xs" icon-only icon="rect-zoom" :active="ui.shiftZoomActive" :title="t('analysis.toolbar.rectZoomTitle')" @click="toggleRectZoom" />
+        <AppButton size="xs" icon-only icon="reset" :title="t('analysis.toolbar.resetZoomTitle')" @click="resetZoom" />
+      </template>
       <span v-if="ui.mainView === 'chart' && hiddenCurveCount" class="chart-hidden-count">{{ t('analysis.toolbar.hiddenCount', { n: hiddenCurveCount }) }}</span>
       <template v-if="ui.mainView === 'three'">
         <div class="seg">
