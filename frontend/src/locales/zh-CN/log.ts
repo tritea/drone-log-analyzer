@@ -1,0 +1,48 @@
+/** 日志域：加载流程（stage key）、记录浏览弹窗、命令/参数加载失败 toast。 */
+export default {
+  stage: {
+    parsing: '正在解析日志…',
+    loading: '正在加载日志数据…',
+    curves: '正在恢复曲线…',
+  },
+  loadFailed: '加载失败: {err}',
+  loadSuccess: '日志加载成功！',
+  commandsLoadFailed: '航点命令加载失败: {err}',
+  mavlinkLoadFailed: 'MAVLink 命令加载失败: {err}',
+  parametersLoadFailed: '参数加载失败: {err}',
+  inspector: {
+    title: '记录浏览',
+    subtitle: '消息、航点命令、MAVLink 命令与参数按需加载。',
+    tab: { messages: '消息', commands: '航点命令', parameters: '参数' },
+    search: {
+      messages: '搜索消息...',
+      commands: '搜索命令、序号或坐标...',
+      mavlink: '搜索命令、结果或坐标...',
+      parameters: '搜索参数名称...',
+    },
+    clearSearch: '清空搜索',
+    showCount: '显示 {shown} / {total}',
+    refresh: '刷新',
+    col: {
+      time: '时间',
+      seq: '序号',
+      command: '命令',
+      lat: '纬度',
+      lng: '经度',
+      alt: '高度(m)',
+      frame: '坐标系',
+      target: '目标',
+      source: '来源',
+      result: '结果',
+      name: '名称',
+      value: '值',
+    },
+    empty: {
+      messages: '暂无消息',
+      commands: '暂无航点命令',
+      mavlink: '暂无 MAVLink 命令',
+      parameters: '暂无参数',
+    },
+    loading: '加载中...',
+  },
+}

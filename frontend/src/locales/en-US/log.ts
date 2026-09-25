@@ -1,0 +1,48 @@
+/** Log domain: load pipeline (stage keys), record browser modal, command/parameter load failure toasts. */
+export default {
+  stage: {
+    parsing: 'Parsing log...',
+    loading: 'Loading log data...',
+    curves: 'Restoring curves...',
+  },
+  loadFailed: 'Failed to load: {err}',
+  loadSuccess: 'Log loaded successfully!',
+  commandsLoadFailed: 'Failed to load waypoint commands: {err}',
+  mavlinkLoadFailed: 'Failed to load MAVLink commands: {err}',
+  parametersLoadFailed: 'Failed to load parameters: {err}',
+  inspector: {
+    title: 'Record Browser',
+    subtitle: 'Messages, waypoint commands, MAVLink commands and parameters load on demand.',
+    tab: { messages: 'Messages', commands: 'Waypoint Commands', parameters: 'Parameters' },
+    search: {
+      messages: 'Search messages...',
+      commands: 'Search commands, sequence or coordinates...',
+      mavlink: 'Search commands, result or coordinates...',
+      parameters: 'Search parameter names...',
+    },
+    clearSearch: 'Clear search',
+    showCount: 'Showing {shown} / {total}',
+    refresh: 'Refresh',
+    col: {
+      time: 'Time',
+      seq: 'Seq',
+      command: 'Command',
+      lat: 'Latitude',
+      lng: 'Longitude',
+      alt: 'Alt (m)',
+      frame: 'Frame',
+      target: 'Target',
+      source: 'Source',
+      result: 'Result',
+      name: 'Name',
+      value: 'Value',
+    },
+    empty: {
+      messages: 'No messages',
+      commands: 'No waypoint commands',
+      mavlink: 'No MAVLink commands',
+      parameters: 'No parameters',
+    },
+    loading: 'Loading...',
+  },
+}

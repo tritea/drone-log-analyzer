@@ -1,0 +1,10 @@
+node_modules/
+*.exe
+dist/
+dist/frontend/
+frontend/dist/
+build/bin/
+bin/
+.tmp/
+rsrc_windows_*.syso
+.claude/

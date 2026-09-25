@@ -1,0 +1,46 @@
+/** 3D 场景域：场景视图、姿态卡、WebGL 错误、位置调试面板、时间轴与遥控器 HUD。 */
+export default {
+  scene: {
+    loadingTelemetry: '正在加载3D遥测...',
+    attitudeTitle: '当前姿态',
+    attitudeSourceTitle: '姿态数据来源',
+    compareTitle: '叠加第二姿态源(半透明虚影)与主无人机对照',
+    compare: '对比',
+    compareSourceTitle: '虚影无人机姿态源',
+  },
+  webgl: {
+    moduleMissing: 'three.module.min.js 未加载（vendor/three.module.min.js 可能 404 或损坏），3D 视图不可用',
+    unsupported: '浏览器/WebView 不支持 WebGL —— 3D 无法渲染。请换用 Chrome/Edge，或在浏览器设置里开启硬件加速。',
+    contextFailed: 'WebGL 上下文创建失败（渲染器降级）。请更新显卡驱动或在浏览器里启用硬件加速后重试。',
+    initFailed: '3D初始化失败: {err}',
+    attitudeUnsupported: '浏览器/WebView 不支持 WebGL —— 姿态仪不可用。请换用 Chrome/Edge，或在浏览器设置里开启硬件加速。',
+  },
+  noGpsRoute: '当前轨迹非 GPS 经纬度，无法叠加航线与航点',
+  debug: {
+    title: '位置调试',
+    hideTitle: '隐藏（设置里可重新打开）',
+    time: '时间',
+    rawLat: '原始 Lat',
+    rawLng: '原始 Lng',
+    rawAlt: '原始 Alt',
+    rawPE: '原始 PE(m)',
+    rawPN: '原始 PN(m)',
+    convert: '↓ 转换',
+    note: '原始值走 float32(7位可见量化步长)，XYZ 走 int32 全精度(1cm)',
+  },
+  timeline: {
+    pause: '暂停',
+    play: '播放',
+    dragHint: '拖动/点击定位 · {time}',
+  },
+  rc: {
+    title: '遥控器',
+    unrecognized: '未识别',
+    throttleYaw: '油门 / 偏航',
+    pitchRoll: '俯仰 / 横滚',
+    roll: '横滚',
+    pitch: '俯仰',
+    throttle: '油门',
+    yaw: '偏航',
+  },
+}

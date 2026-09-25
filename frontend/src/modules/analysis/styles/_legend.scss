@@ -1,0 +1,87 @@
+// 图例（ChartLegend）：曲线名 + 色条 + 显隐眼睛按钮。
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px 14px;
+  max-height: 58px;
+  overflow-y: auto;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  background: #fff;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 220px;
+  height: 18px;
+  color: var(--text);
+  font: 700 11px/1.2 "SF Mono", Consolas, monospace;
+}
+
+.chart-legend-line {
+  width: 20px;
+  height: 4px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+}
+
+.chart-legend-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend-eye-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--text3);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.12s, color 0.12s;
+}
+
+.legend-eye-btn:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+// 移除按钮：默认隐藏，图例项 hover 时出现（与眼睛按钮同款触达）。
+.legend-del-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--text3);
+  cursor: pointer;
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+}
+
+.chart-legend-item:hover .legend-del-btn { opacity: 1; }
+
+.legend-del-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.chart-legend-item.is-drawn-off .chart-legend-line { opacity: 0.25; }
+.chart-legend-item.is-drawn-off .chart-legend-name { opacity: 0.45; }

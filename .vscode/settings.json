@@ -1,0 +1,8 @@
+{
+  "//": "Wails 桌面应用的 Go 代码由 desktop/production build tag 门控。这里让 VS Code 的 Go 扩展与 gopls 在后台分析（诊断/补全/跳转）时也带上这些 tag，否则会触发 Wails 扩展的 “will not build without the correct build tags” 告警，并出现 tag 门控代码的误报。打包/运行仍用 wails build / wails dev。",
+  "go.buildTags": "desktop,production",
+  "go.testTags": "desktop,production",
+  "gopls": {
+    "build.buildFlags": ["-tags=desktop,production"]
+  }
+}

@@ -1,0 +1,41 @@
+/** Map domain: base-map notices, map cache panel, map view and map-state store. */
+export default {
+  notice: {
+    loading: 'Loading base map...',
+    noGeo: 'Current track has no GPS coordinates; track and waypoints cannot be overlaid.',
+  },
+  cache: {
+    title: 'Map Cache',
+    dir: 'Folder: {dir}',
+    total: 'Total {total} · per-source cap {cap}',
+    tiles: '{size} · {n} tiles',
+    clean: 'Clean',
+    clearAll: 'Clear all',
+    sourceLoadFailed: 'Failed to load the base-map list',
+    statsLoadFailed: 'Failed to read the map cache: {err}',
+    cleaned: 'Cleaned',
+    cleanFailed: 'Clean failed: {err}',
+    clearedAll: 'All cache cleared',
+  },
+  view: {
+    sourceFailed: 'The current base-map source failed to load. Switch to another source at the top right.',
+  },
+  controls: {
+    locate: 'Locate',
+    locateTitle: 'Locate the drone at its current position',
+    providerTitle: 'Base-map source',
+    terrain: 'Terrain',
+    terrainTitle: 'Enable DEM terrain',
+    terrainUnsupported: 'The current base map does not support terrain',
+    lock: 'Lock',
+    lockTitle: 'Lock the follow view',
+    cache: 'Cache',
+    cacheTitle: 'View or clean the tile cache',
+    models: 'Models',
+    modelsTitle: 'Manage custom 3D models',
+    tilesBtn: '3D Tiles',
+    tilesTitle: 'Manage 3D Tiles survey models',
+    unfold: 'Expand controls',
+    fold: 'Collapse controls',
+  },
+}

@@ -1,0 +1,41 @@
+/** 地图域：底图状态提示、地图缓存面板、地图视图与地图状态 store。 */
+export default {
+  notice: {
+    loading: '正在加载底图...',
+    noGeo: '当前轨迹没有 GPS 经纬度，无法叠加轨迹与航点。',
+  },
+  cache: {
+    title: '地图缓存',
+    dir: '目录：{dir}',
+    total: '总占用 {total} · 单源上限 {cap}',
+    tiles: '{size} · {n} 块',
+    clean: '清理',
+    clearAll: '清空全部',
+    sourceLoadFailed: '加载底图列表失败',
+    statsLoadFailed: '读取地图缓存失败：{err}',
+    cleaned: '已清理',
+    cleanFailed: '清理失败：{err}',
+    clearedAll: '已清空全部缓存',
+  },
+  view: {
+    sourceFailed: '当前底图源加载失败，可以在右上角切换其他来源。',
+  },
+  controls: {
+    locate: '定位',
+    locateTitle: '定位到无人机当前位置',
+    providerTitle: '底图来源',
+    terrain: '地形',
+    terrainTitle: '启用 DEM 地形',
+    terrainUnsupported: '当前底图不支持地形',
+    lock: '锁定',
+    lockTitle: '锁定追随视角',
+    cache: '缓存',
+    cacheTitle: '查看或清理瓦片缓存',
+    models: '模型',
+    modelsTitle: '管理自定义 3D 模型',
+    tilesBtn: '3D Tiles',
+    tilesTitle: '管理 3D Tiles 测绘模型',
+    unfold: '展开控件',
+    fold: '收起控件',
+  },
+}

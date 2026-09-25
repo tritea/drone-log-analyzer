@@ -1,0 +1,855 @@
+{
+  "format": "apm",
+  "version": 1,
+  "groups": {
+    "GPS": {
+      "description": "GPS 定位：卫星质量、位置、速度与航向，是导航与 EKF 位置估计的基础",
+      "affects": ["position", "navigation", "ekf"],
+      "fields": {
+        "NSats": {
+          "description": "可见卫星数量",
+          "unit": "count",
+          "thresholds": [
+            { "level": "warning", "op": "lt", "value": 8 },
+            { "level": "critical", "op": "lt", "value": 5 }
+          ],
+          "affects": ["position", "navigation"],
+          "analysis": [
+            { "condition": "NSats 下降 && HDop 升高", "meaning": "GPS 信号质量下降" },
+            { "condition": "NSats 骤降至 0 且持续", "meaning": "GPS 失锁，位置估计退化为航位推算" }
+          ],
+          "related": ["GPS.HDop", "GPS.Status"]
+        },
+        "HDop": {
+          "description": "水平精度因子，越小定位几何越好",
+          "unit": "",
+          "thresholds": [
+            { "level": "warning", "op": "gt", "value": 2 },
+            { "level": "critical", "op": "gt", "value": 5 }
+          ],
+          "affects": ["position", "ekf"],
+          "analysis": [
+            { "condition": "HDop 持续偏高（>2）", "meaning": "定位几何差，水平位置漂移风险" }
+          ],
+          "related": ["GPS.NSats", "GPA.HAcc"]
+        },
+        "Status": { "description": "定位状态", "unit": "enum", "values": ["0=未连接","1=有信号无锁","2=2D","3=3D","4=DGPS","5=RTK浮点","6=RTK固定","7=静态","8=PPP"], "affects": ["position","navigation"], "analysis": [{"condition":"Status 掉回 0/1","meaning":"定位丢失或降级，高度/速度不可信"},{"condition":"Status=6 且突然掉到 3","meaning":"RTK 失锁，精度从厘米级跌到米级"}] },
+        "Lat": { "description": "纬度（度）", "unit": "deg", "affects": ["position"] },
+        "Lng": { "description": "经度（度）", "unit": "deg", "affects": ["position"] },
+        "Alt": { "description": "GPS 海拔高度（MSL，米；接收机已做大地水准面换算）", "unit": "m", "affects": ["position"], "related": ["BARO.Alt", "CTUN.BAlt"] },
+        "Spd": { "description": "地速（米/秒）", "unit": "m/s", "affects": ["navigation"] },
+        "GCrs": { "description": "地面航向（度，0=北）", "unit": "deg", "affects": ["navigation"] },
+        "VZ": { "description": "垂直速度（米/秒，正=上升）", "unit": "m/s", "affects": ["position"] },
+        "Yaw": { "description": "GPS 双天线航向（度）；无双天线时不可用", "unit": "deg", "affects": ["heading"], "related": ["ATT.Yaw"] }
+      }
+    },
+    "GPA": {
+      "description": "GPS 精度信息：精度因子与精度估计（比 GPS 组的 HDop 更细）",
+      "affects": ["position", "ekf"],
+      "fields": {
+        "VDop": { "description": "垂直精度因子", "unit": "" },
+        "HAcc": {
+          "description": "水平位置精度（米）",
+          "unit": "m",
+          "thresholds": [
+            { "level": "warning", "op": "gt", "value": 2 },
+            { "level": "critical", "op": "gt", "value": 5 }
+          ],
+          "affects": ["position"]
+        },
+        "VAcc": { "description": "垂直位置精度（米）", "unit": "m" },
+        "SAcc": { "description": "速度精度（米/秒）", "unit": "m/s" },
+        "YAcc": { "description": "航向精度（度，双天线）", "unit": "deg" },
+        "Delta": { "description": "两次定位间的系统时间差（毫秒）", "unit": "ms" }
+      }
+    },
+    "BAT": {
+      "description": "动力电池：电压/电流/累计电量/剩余估计，判断续航与电池健康",
+      "affects": ["power", "duration", "safety"],
+      "vehicleNotes": {
+        "rover": "Rover 电流较小，电压下垂不明显，重点看 CurrTot 与续航",
+        "sub": "水下低温环境下电压下垂更快，临界阈值应上调"
+      },
+      "fields": {
+        "Volt": {
+          "description": "电池瞬时电压（V）。锂电按每芯判断：warning≈3.5V/芯、critical≈3.3V/芯，按实际 S 数换算（如 4S：14.0/13.2）",
+          "unit": "V",
+          "affects": ["power", "safety"],
+          "analysis": [
+            { "condition": "Volt 随时间持续下降且斜率陡", "meaning": "正常放电或容量不足；斜率异常陡=电池老化/过载" },
+            { "condition": "Volt 骤降伴随大 Curr", "meaning": "电池内阻大或放电能力不足（C 数不够）" }
+          ],
+          "related": ["BAT.VoltR", "BAT.Curr", "BCL.V1"]
+        },
+        "VoltR": {
+          "description": "静态（无负载）电池电压（V），用于判断电池真实余量与内阻",
+          "unit": "V",
+          "affects": ["power"],
+          "analysis": [
+            { "condition": "VoltR 明显低于同电量 Volt 预期", "meaning": "电池老化，内阻增大" }
+          ]
+        },
+        "Curr": {
+          "description": "瞬时电流（A）",
+          "unit": "A",
+          "affects": ["power"],
+          "analysis": [
+            { "condition": "悬停电流比历史基线明显偏高", "meaning": "机械阻力增大（轴承/桨损）或超载" }
+          ]
+        },
+        "CurrTot": {
+          "description": "累计消耗电量（mAh）",
+          "unit": "mAh",
+          "affects": ["duration"],
+          "analysis": [
+            { "condition": "CurrTot 变化率 = 平均功耗", "meaning": "结合电池容量估算剩余续航" }
+          ]
+        },
+        "EnrgTot": { "description": "累计消耗能量（Wh）", "unit": "Wh", "affects": ["duration"] },
+        "Res": { "description": "估算电池内阻（欧姆），越大电池越老化", "unit": "ohm" },
+        "RemPct": { "description": "剩余电量百分比（%）", "unit": "percent", "affects": ["duration", "safety"] },
+        "Temp": { "description": "电池温度（℃）", "unit": "celsius" },
+        "SH": { "description": "电池健康状态（%，0=未知）", "unit": "percent" }
+      }
+    },
+    "BCL": {
+      "description": "智能电池单芯电压：判断电芯失衡与真实余量",
+      "affects": ["power", "safety"],
+      "fields": {
+        "V1": {
+          "description": "第 1 芯电芯电压（mV）。单芯 warning≈3500mV、critical≈3300mV",
+          "unit": "mV",
+          "thresholds": [
+            { "level": "warning", "op": "lt", "value": 3500 },
+            { "level": "critical", "op": "lt", "value": 3300 }
+          ],
+          "affects": ["power", "safety"],
+          "analysis": [
+            { "condition": "各芯最大最小差 >50mV 且逐渐扩大", "meaning": "电芯失衡，电池老化或有坏芯" }
+          ]
+        }
+      }
+    },
+    "CTUN": {
+      "description": "高度/油门控制通道：期望与实际高度、油门输出，判断垂向控制品质",
+      "affects": ["altitude", "throttle", "landing"],
+      "fields": {
+        "ThO": {
+          "description": "油门输出（0~1，4.x 字段名；3.x 叫 ThrOut）。多旋翼悬停值偏高说明效率差或超载",
+          "unit": "norm",
+          "affects": ["throttle", "power"],
+          "analysis": [
+            { "condition": "悬停 ThO 持续 >0.7", "meaning": "电机/桨效率低或机体重载，抗风余量不足" },
+            { "condition": "ThO 饱和且高度仍掉", "meaning": "动力不足，存在失控风险" }
+          ],
+          "related": ["MOTB.ThrOut", "RCOU.C1"]
+        },
+        "ThrOut": {
+          "description": "油门输出（%，3.x 字段名；4.x 叫 ThO）",
+          "unit": "percent",
+          "affects": ["throttle", "power"],
+          "analysis": [
+            { "condition": "悬停 ThrOut 持续 >70%", "meaning": "电机/桨效率低或机体重载" }
+          ]
+        },
+        "ThI": { "description": "飞行员油门输入（0~1）", "unit": "norm", "affects": ["throttle"] },
+        "ThH": { "description": "估算的悬停油门（0~1）；与实际悬停 ThO 偏差大说明 MOT_THST_HOVER 未校准", "unit": "norm", "affects": ["throttle"] },
+        "ABst": { "description": "大角度时的油门提升量", "unit": "norm", "affects": ["throttle"] },
+        "DAlt": { "description": "期望高度（米，相对 HOME）", "unit": "m", "affects": ["altitude"] },
+        "Alt": {
+          "description": "实际（EKF）高度（米，相对 HOME）",
+          "unit": "m",
+          "affects": ["altitude"],
+          "analysis": [
+            { "condition": "排查掉高/高度跳变", "meaning": "先查参数 EK3_SRC1_POSZ 确认高度源（0=气压计 1=测距仪 2=GPS 3=GPS+气压融合），再对照该源原始数据（BARO.Alt / RFND.Dist / GPS.Alt）与 EKF 估计，区分是源跳变还是融合异常" },
+            { "condition": "GPS 高度源且 RTK 状态变化时掉高", "meaning": "RTK Fix→Float 降级使 GPS 垂直精度突变，优先查 GPS.NSats/HDop 与 RTK 状态" }
+          ]
+        },
+        "BAlt": {
+          "description": "气压计高度（米，相对 HOME；4.x 叫 BAlt，3.x 叫 BarAlt）",
+          "unit": "m",
+          "affects": ["altitude"],
+          "analysis": [
+            { "condition": "BAlt 与 GPS.Alt 长期发散", "meaning": "气压漂移（天气/气流）或气压计遮挡" }
+          ],
+          "related": ["GPS.Alt"]
+        },
+        "BarAlt": { "description": "气压计高度（米，3.x 字段名；4.x 叫 BAlt）", "unit": "m", "affects": ["altitude"] },
+        "DSAlt": { "description": "期望测距仪高度（米，相对地面）", "unit": "m", "appliesTo": ["multirotor", "helicopter", "vtol"], "affects": ["altitude"] },
+        "SAlt": { "description": "测距仪高度（米，相对地面）", "unit": "m", "appliesTo": ["multirotor", "helicopter", "vtol"], "affects": ["altitude"], "related": ["RFND.Dist"] },
+        "TAlt": { "description": "地形高度（米，地形跟随启用时）", "unit": "m", "affects": ["altitude"], "related": ["TERR.CHeight"] },
+        "DCRt": { "description": "期望爬升率（米/秒；4.x 叫 DCRt，3.x 部分版本无）", "unit": "m/s", "affects": ["altitude"] },
+        "CRt": { "description": "实际爬升率（米/秒，正=上升）", "unit": "m/s", "appliesTo": ["multirotor", "helicopter", "vtol"], "affects": ["altitude"] }
+      }
+    },
+    "ATT": {
+      "description": "姿态：实际与期望的 Roll/Pitch/Yaw，判断姿态跟踪与振动水平",
+      "affects": ["attitude", "stability", "vibration"],
+      "fields": {
+        "Roll": { "description": "实际横滚角（度）", "unit": "deg", "affects": ["attitude"], "related": ["ATT.DesRoll"] },
+        "DesRoll": {
+          "description": "期望横滚角（度）",
+          "unit": "deg",
+          "affects": ["attitude"],
+          "analysis": [
+            { "condition": "|Roll - DesRoll| 持续偏大", "meaning": "横滚跟踪差：增益低、振动或机械问题" }
+          ],
+          "related": ["ATT.Roll"]
+        },
+        "Pitch": { "description": "实际俯仰角（度）", "unit": "deg", "affects": ["attitude"], "related": ["ATT.DesPitch"] },
+        "DesPitch": {
+          "description": "期望俯仰角（度）",
+          "unit": "deg",
+          "affects": ["attitude"],
+          "analysis": [
+            { "condition": "|Pitch - DesPitch| 持续偏大", "meaning": "俯仰跟踪差：重心偏、增益低或风扰" }
+          ],
+          "related": ["ATT.Pitch"]
+        },
+        "Yaw": { "description": "实际偏航角（度）", "unit": "deg", "affects": ["heading"], "related": ["ATT.DesYaw"] },
+        "DesYaw": {
+          "description": "期望偏航角（度）",
+          "unit": "deg",
+          "affects": ["heading"],
+          "analysis": [
+            { "condition": "Yaw 缓慢单方向漂移", "meaning": "磁力计干扰或 GPS 航向不准" }
+          ],
+          "related": ["ATT.Yaw"]
+        },
+        "AEKF": { "description": "当前使用的 EKF 类型标识", "unit": "" }
+      }
+    },
+    "RATE": {
+      "description": "姿态角速率控制：期望与实际的 Roll/Pitch/Yaw 角速率与输出，调参诊断核心",
+      "affects": ["attitude", "stability"],
+      "appliesTo": ["multirotor", "helicopter", "vtol", "sub"],
+      "fields": {
+        "RDes": { "description": "期望横滚角速率（度/秒）", "unit": "deg/s", "related": ["RATE.R"] },
+        "R": { "description": "实际横滚角速率（度/秒）", "unit": "deg/s" },
+        "PDes": { "description": "期望俯仰角速率（度/秒）", "unit": "deg/s", "related": ["RATE.P"] },
+        "P": { "description": "实际俯仰角速率（度/秒）", "unit": "deg/s" },
+        "YDes": { "description": "期望偏航角速率（度/秒）", "unit": "deg/s", "related": ["RATE.Y"] },
+        "Y": { "description": "实际偏航角速率（度/秒）", "unit": "deg/s" },
+        "ROut": { "description": "横滚通道归一化输出", "unit": "norm" },
+        "POut": { "description": "俯仰通道归一化输出", "unit": "norm" },
+        "YOut": { "description": "偏航通道归一化输出", "unit": "norm" },
+        "ADes": { "description": "期望垂直加速度（cm/s²）", "unit": "cm/s/s" },
+        "AOut": { "description": "垂直推力输出百分比", "unit": "percent" }
+      }
+    },
+    "VIBE": {
+      "description": "振动（主加速度计滤波后的振动水平）——多旋翼诊断第一入口",
+      "affects": ["vibration", "attitude", "ekf"],
+      "fields": {
+        "VibeX": {
+          "description": "X 轴滤波振动水平（m/s²）。官方参考：<15 良好，15~30 需整改，>30 危险",
+          "unit": "m/s/s",
+          "thresholds": [
+            { "level": "warning", "op": "gt", "value": 15 },
+            { "level": "critical", "op": "gt", "value": 30 }
+          ],
+          "affects": ["vibration"],
+          "analysis": [
+            { "condition": "Vibe 持续 >15 且伴随 ATT 跟踪差/高度抖动", "meaning": "减震不良或桨/电机不平衡" },
+            { "condition": "Vibe 随油门升高同步增大", "meaning": "桨/电机/轴承问题（转频相关）" }
+          ],
+          "related": ["VIBE.VibeY", "VIBE.VibeZ"]
+        },
+        "VibeY": {
+          "description": "Y 轴滤波振动水平（m/s²），同 VibeX 阈值",
+          "unit": "m/s/s",
+          "thresholds": [
+            { "level": "warning", "op": "gt", "value": 15 },
+            { "level": "critical", "op": "gt", "value": 30 }
+          ],
+          "affects": ["vibration"]
+        },
+        "VibeZ": {
+          "description": "Z 轴滤波振动水平（m/s²），同 VibeX 阈值",
+          "unit": "m/s/s",
+          "thresholds": [
+            { "level": "warning", "op": "gt", "value": 15 },
+            { "level": "critical", "op": "gt", "value": 30 }
+          ],
+          "affects": ["vibration"]
+        },
+        "Clip": {
+          "description": "加速度计削波（clipping）事件计数——出现即说明振动严重到传感器饱和",
+          "unit": "count",
+          "thresholds": [{ "level": "warning", "op": "gt", "value": 0 }],
+          "affects": ["vibration"],
+          "analysis": [
+            { "condition": "Clip 持续增长", "meaning": "振动极其严重，加速度计饱和，EKF 高度/速度估计受损" }
+          ]
+        }
+      }
+    },
+    "IMU": {
+      "description": "惯性测量单元原始数据：陀螺/加计读数、健康与错误计数",
+      "affects": ["attitude", "ekf", "vibration"],
+      "fields": {
+        "GyrX": { "description": "陀螺 X 轴角速率（rad/s）", "unit": "rad/s" },
+        "GyrY": { "description": "陀螺 Y 轴角速率（rad/s）", "unit": "rad/s" },
+        "GyrZ": { "description": "陀螺 Z 轴角速率（rad/s）", "unit": "rad/s" },
+        "AccX": { "description": "加计 X 轴加速度（m/s²）", "unit": "m/s/s" },
+        "AccY": { "description": "加计 Y 轴加速度（m/s²）", "unit": "m/s/s" },
+        "AccZ": { "description": "加计 Z 轴加速度（m/s²）", "unit": "m/s/s" },
+        "T": { "description": "IMU 温度（℃）——温度漂移大说明预热不足", "unit": "celsius" },
+        "EG": { "description": "陀螺错误计数——非零增长说明传感器异常", "unit": "count" },
+        "EA": { "description": "加计错误计数——非零增长说明传感器异常", "unit": "count" },
+        "GH": { "description": "陀螺健康标志（1=健康）", "unit": "bool" },
+        "AH": { "description": "加计健康标志（1=健康）", "unit": "bool" }
+      }
+    },
+    "ACC": {
+      "description": "原始加速度计数据（未滤波）",
+      "affects": ["vibration", "attitude", "ekf", "position"],
+      "fields": {
+        "AccX": { "description": "X 轴加速度（m/s²）", "unit": "m/s/s" },
+        "AccY": { "description": "Y 轴加速度（m/s²）", "unit": "m/s/s" },
+        "AccZ": { "description": "Z 轴加速度（m/s²）", "unit": "m/s/s" }
+      }
+    },
+    "GYR": {
+      "description": "原始陀螺数据（未滤波）",
+      "affects": ["attitude", "ekf", "vibration"],
+      "fields": {
+        "GyrX": { "description": "X 轴角速率（rad/s）", "unit": "rad/s" },
+        "GyrY": { "description": "Y 轴角速率（rad/s）", "unit": "rad/s" },
+        "GyrZ": { "description": "Z 轴角速率（rad/s）", "unit": "rad/s" }
+      }
+    },
+    "BARO": {
+      "description": "气压计：高度/气压/温度，EKF 高度的主要来源",
+      "affects": ["altitude", "ekf"],
+      "fields": {
+        "Alt": { "description": "气压计高度（米）", "unit": "m", "affects": ["altitude"] },
+        "AltAMSL": { "description": "海拔高度（米，MSL）", "unit": "m" },
+        "Press": { "description": "大气压（Pa）", "unit": "Pa" },
+        "Temp": { "description": "气压计温度（℃）", "unit": "celsius" },
+        "CRt": { "description": "气压导出的爬升率（m/s）", "unit": "m/s", "affects": ["altitude"] },
+        "Offset": { "description": "气压高度偏置（米，校准引入）", "unit": "m" },
+        "H": { "description": "健康标志（1=健康）", "unit": "bool" }
+      }
+    },
+    "MAG": {
+      "description": "罗盘（磁力计）：磁场强度/偏置/电机干扰补偿，航向估计来源",
+      "affects": ["heading", "ekf"],
+      "fields": {
+        "MagX": { "description": "X 轴磁场强度（mGauss）", "unit": "mGauss", "related": ["MAG.OfsX"] },
+        "MagY": { "description": "Y 轴磁场强度（mGauss）", "unit": "mGauss", "related": ["MAG.OfsY"] },
+        "MagZ": { "description": "Z 轴磁场强度（mGauss）", "unit": "mGauss", "related": ["MAG.OfsZ"] },
+        "OfsX": { "description": "X 轴磁场偏置（mGauss）——校准结果", "unit": "mGauss" },
+        "OfsY": { "description": "Y 轴磁场偏置（mGauss）", "unit": "mGauss" },
+        "OfsZ": { "description": "Z 轴磁场偏置（mGauss）", "unit": "mGauss" },
+        "MOX": { "description": "电机干扰补偿 X（mGauss）", "unit": "mGauss" },
+        "MOY": { "description": "电机干扰补偿 Y（mGauss）", "unit": "mGauss" },
+        "MOZ": { "description": "电机干扰补偿 Z（mGauss）", "unit": "mGauss" },
+        "Health": { "description": "罗盘健康标志（1=健康）", "unit": "bool" }
+      }
+    },
+    "RCIN": {
+      "description": "遥控输入通道（微秒 PWM）",
+      "affects": ["control"],
+      "fields": {
+        "C1": { "description": "通道 1 输入（us）——Roll", "unit": "us" },
+        "C2": { "description": "通道 2 输入（us）——Pitch", "unit": "us" },
+        "C3": { "description": "通道 3 输入（us）——油门", "unit": "us" },
+        "C4": { "description": "通道 4 输入（us）——Yaw", "unit": "us" },
+        "C5": { "description": "通道 5 输入（us）——通常为模式开关", "unit": "us" }
+      }
+    },
+    "RCOU": {
+      "description": "伺服/电机输出通道（微秒 PWM）",
+      "affects": ["control", "throttle"],
+      "fields": {
+        "C1": {
+          "description": "通道 1 输出（us）。多旋翼悬停输出 >1900us 接近饱和，动力余量不足",
+          "unit": "us",
+          "affects": ["throttle"],
+          "analysis": [
+            { "condition": "悬停某通道持续 >1900us", "meaning": "该电机负担重：桨损/机体偏重/失衡" },
+            { "condition": "同侧两个电机输出长期差异大", "meaning": "重心偏或框架变形" }
+          ]
+        },
+        "C2": { "description": "通道 2 输出（us）", "unit": "us" },
+        "C3": { "description": "通道 3 输出（us）", "unit": "us" },
+        "C4": { "description": "通道 4 输出（us）", "unit": "us" }
+      }
+    },
+    "XKF1": {
+      "description": "EKF3 估计器主输出：姿态/速度/位置估计与陀螺偏置",
+      "affects": ["ekf", "position", "attitude"],
+      "fields": {
+        "C": { "description": "EKF 核心（core）编号；多核心时仅主核心参与控制", "unit": "" },
+        "Roll": { "description": "EKF 估计横滚（度）", "unit": "deg" },
+        "Pitch": { "description": "EKF 估计俯仰（度）", "unit": "deg" },
+        "Yaw": { "description": "EKF 估计偏航（度）", "unit": "deg" },
+        "VN": { "description": "估计速度北向分量（m/s）", "unit": "m/s", "related": ["XKF3.IVN"] },
+        "VE": { "description": "估计速度东向分量（m/s）", "unit": "m/s", "related": ["XKF3.IVE"] },
+        "VD": { "description": "估计速度垂直分量（m/s，向下为正）", "unit": "m/s" },
+        "PN": { "description": "相对 EKF 原点北向位置（米）", "unit": "m", "related": ["XKF3.IPN"] },
+        "PE": { "description": "相对 EKF 原点东向位置（米）", "unit": "m", "related": ["XKF3.IPE"] },
+        "PD": { "description": "相对 EKF 原点垂直位置（米，向下为正）", "unit": "m", "related": ["XKF3.IPD"] },
+        "GX": { "description": "估计陀螺 X 偏置（deg/s）——持续增长说明陀螺漂移", "unit": "deg/s" },
+        "GY": { "description": "估计陀螺 Y 偏置（deg/s）", "unit": "deg/s" },
+        "GZ": { "description": "估计陀螺 Z 偏置（deg/s）", "unit": "deg/s" },
+        "dPD": { "description": "垂直位置滤波导数（m/s）", "unit": "m/s" }
+      }
+    },
+    "XKF2": {
+      "description": "EKF3 估计器次要输出：加计偏置、风速估计、磁场估计",
+      "affects": ["ekf"],
+      "fields": {
+        "AX": { "description": "估计加计 X 偏置", "unit": "m/s/s" },
+        "AY": { "description": "估计加计 Y 偏置", "unit": "m/s/s" },
+        "AZ": { "description": "估计加计 Z 偏置", "unit": "m/s/s" },
+        "VWN": { "description": "估计风速北向分量（m/s）", "unit": "m/s" },
+        "VWE": { "description": "估计风速东向分量（m/s）", "unit": "m/s" },
+        "MN": { "description": "估计地磁场北向分量（mGauss）", "unit": "mGauss" },
+        "ME": { "description": "估计地磁场东向分量（mGauss）", "unit": "mGauss" },
+        "MD": { "description": "估计地磁场垂直分量（mGauss）", "unit": "mGauss" },
+        "MX": { "description": "估计机体磁场 X（mGauss）", "unit": "mGauss" },
+        "MY": { "description": "估计机体磁场 Y（mGauss）", "unit": "mGauss" },
+        "MZ": { "description": "估计机体磁场 Z（mGauss）", "unit": "mGauss" }
+      }
+    },
+    "XKF3": {
+      "description": "EKF3 新息（innovation）：测量与预测之差——定位『哪个传感器与估计冲突』",
+      "affects": ["ekf"],
+      "fields": {
+        "IVN": {
+          "description": "速度新息北向分量（m/s）——绝对值大说明 GPS 速度与惯性预测不符",
+          "unit": "m/s",
+          "related": ["XKF1.VN"],
+          "analysis": [
+            { "condition": "IVN/IVE 突然增大", "meaning": "GPS 速度跳变（glitch）或惯导漂移" }
+          ]
+        },
+        "IVE": { "description": "速度新息东向分量（m/s）", "unit": "m/s", "related": ["XKF1.VE"] },
+        "IVD": { "description": "速度新息垂直分量（m/s）", "unit": "m/s" },
+        "IPN": { "description": "位置新息北向分量（米）", "unit": "m", "related": ["XKF1.PN"] },
+        "IPE": { "description": "位置新息东向分量（米）", "unit": "m", "related": ["XKF1.PE"] },
+        "IPD": { "description": "位置新息垂直分量（米）", "unit": "m" },
+        "IMX": { "description": "磁场新息 X（mGauss）——大说明罗盘受干扰", "unit": "mGauss", "related": ["MAG.MagX"] },
+        "IMY": { "description": "磁场新息 Y（mGauss）", "unit": "mGauss" },
+        "IMZ": { "description": "磁场新息 Z（mGauss）", "unit": "mGauss" },
+        "IYAW": { "description": "偏航新息（度）——大说明航向源冲突（罗盘 vs GPS 航向）", "unit": "deg" },
+        "IVT": { "description": "空速新息（仅固定翼）", "unit": "m/s" },
+        "RErr": { "description": "该核心相对主核心的累积误差", "unit": "" },
+        "ErSc": { "description": "综合误差分数，越大越不健康（>1 即明显）", "unit": "" }
+      }
+    },
+    "XKF4": {
+      "description": "EKF3 方差/测试比与状态位：SV/SP/SH/SM <1 表示测量被接受，>1 表示被拒绝",
+      "affects": ["ekf"],
+      "fields": {
+        "SV": {
+          "description": "速度测试比（<1 接受 / >1 拒绝）——持续 >1 说明速度测量异常",
+          "unit": "",
+          "analysis": [
+            { "condition": "SV 持续 >1", "meaning": "GPS 速度持续被拒绝：信号差或惯导漂移" }
+          ]
+        },
+        "SP": {
+          "description": "位置测试比（<1 接受 / >1 拒绝）",
+          "unit": "",
+          "analysis": [
+            { "condition": "SP 持续 >1", "meaning": "GPS 位置持续被拒绝：位置漂移风险大" }
+          ]
+        },
+        "SH": {
+          "description": "高度测试比（<1 接受 / >1 拒绝）",
+          "unit": "",
+          "analysis": [
+            { "condition": "SH 持续 >1", "meaning": "气压高度被拒绝：气流冲击/遮挡或振动" }
+          ]
+        },
+        "SM": {
+          "description": "磁场测试比（<1 接受 / >1 拒绝）——持续 >1 即罗盘干扰",
+          "unit": "",
+          "analysis": [
+            { "condition": "SM 持续 >1", "meaning": "罗盘数据被拒绝：磁干扰（动力线/大电流）或校准差" }
+          ]
+        },
+        "SVT": { "description": "空速测试比（固定翼）", "unit": "" },
+        "errRP": { "description": "横滚/俯仰估计滤波误差（度）——>0.3 即倾斜估计恶化", "unit": "deg" },
+        "OFN": { "description": "最近一次位置重置北向分量（米）——非零跳变=位置跳变", "unit": "m" },
+        "OFE": { "description": "最近一次位置重置东向分量（米）", "unit": "m" },
+        "FS": { "description": "滤波器故障位（bit0 四元数坏 / bit1 速度 NaN / bit2-4 磁计坏 / bit5 空速坏…）", "unit": "bitmask" },
+        "TS": { "description": "超时状态位（bit0 位置 / bit1 速度 / bit2 高度 / bit3 磁 / bit4 空速）", "unit": "bitmask" },
+        "SS": {
+          "description": "解状态位：bit0 姿态有效 bit1-2 水平/垂直速度有效 bit3-5 位置有效 bit7 常位置模式 bit13 使用GPS bit14 GPS glitch bit18 航位推算",
+          "unit": "bitmask",
+          "analysis": [
+            { "condition": "SS 的 bit14（16384）置位", "meaning": "GPS 正在 glitch，导航精度受损" },
+            { "condition": "SS 的 bit18（262144）置位", "meaning": "航位推算模式：无位置/速度源" }
+          ]
+        },
+        "GPS": { "description": "滤波器 GPS 状态", "unit": "" },
+        "PI": { "description": "主核心编号", "unit": "" }
+      }
+    },
+    "XKF5": {
+      "description": "EKF3 光流/测距仪新息与误差幅度（主核心）",
+      "affects": ["ekf"],
+      "fields": {
+        "HAGL": { "description": "离地高度估计（米）", "unit": "m", "related": ["RFND.Dist"] },
+        "RI": { "description": "测距仪新息——大说明测距与估计高度冲突", "unit": "" },
+        "rng": { "description": "测距仪测量值（米）", "unit": "m" },
+        "Herr": { "description": "地面偏移状态误差（米）", "unit": "m" },
+        "eAng": { "description": "角度误差幅度（rad）", "unit": "rad" },
+        "eVel": { "description": "速度误差幅度（m/s）", "unit": "m/s" },
+        "ePos": { "description": "位置误差幅度（米）", "unit": "m" },
+        "FIX": { "description": "光流 LOS 新息 X", "unit": "" },
+        "FIY": { "description": "光流 LOS 新息 Y", "unit": "" },
+        "NI": { "description": "归一化光流方差", "unit": "" }
+      }
+    },
+    "NKF1": {
+      "description": "EKF2 估计器主输出（旧固件；字段含义同 XKF1）",
+      "affects": ["ekf"],
+      "fields": {
+        "VN": { "description": "估计速度北向（m/s）", "unit": "m/s" },
+        "VE": { "description": "估计速度东向（m/s）", "unit": "m/s" },
+        "VD": { "description": "估计速度垂直（m/s）", "unit": "m/s" },
+        "PN": { "description": "北向位置（米）", "unit": "m" },
+        "PE": { "description": "东向位置（米）", "unit": "m" },
+        "PD": { "description": "垂直位置（米）", "unit": "m" },
+        "Roll": { "description": "估计横滚（度）", "unit": "deg" },
+        "Pitch": { "description": "估计俯仰（度）", "unit": "deg" },
+        "Yaw": { "description": "估计偏航（度）", "unit": "deg" }
+      }
+    },
+    "NKF3": {
+      "description": "EKF2 新息（旧固件；字段含义同 XKF3）",
+      "affects": ["ekf"],
+      "fields": {
+        "IVN": { "description": "速度新息北向（m/s）", "unit": "m/s" },
+        "IVE": { "description": "速度新息东向（m/s）", "unit": "m/s" },
+        "IPN": { "description": "位置新息北向（米）", "unit": "m" },
+        "IPE": { "description": "位置新息东向（米）", "unit": "m" },
+        "IMX": { "description": "磁场新息 X（mGauss）", "unit": "mGauss" },
+        "IYAW": { "description": "偏航新息（度）", "unit": "deg" }
+      }
+    },
+    "NKF4": {
+      "description": "EKF2 方差/测试比（旧固件；SV/SP/SH/SM 含义同 XKF4）",
+      "affects": ["ekf"],
+      "fields": {
+        "SV": { "description": "速度测试比（<1 接受 / >1 拒绝）", "unit": "" },
+        "SP": { "description": "位置测试比（<1 接受 / >1 拒绝）", "unit": "" },
+        "SH": { "description": "高度测试比（<1 接受 / >1 拒绝）", "unit": "" },
+        "SM": { "description": "磁场测试比（<1 接受 / >1 拒绝）", "unit": "" },
+        "errRP": { "description": "横滚/俯仰滤波误差（度）", "unit": "deg" },
+        "SS": { "description": "解状态位（含义同 XKF4.SS）", "unit": "bitmask" }
+      }
+    },
+    "POS": {
+      "description": "当前规范位置（经纬度/高度）",
+      "affects": ["position"],
+      "fields": {
+        "Lat": { "description": "纬度（度）", "unit": "deg" },
+        "Lng": { "description": "经度（度）", "unit": "deg" },
+        "Alt": { "description": "绝对海拔高度（MSL，米）", "unit": "m" },
+        "RelHomeAlt": { "description": "相对 HOME 高度（米）", "unit": "m" },
+        "RelOriginAlt": { "description": "相对导航原点高度（米）", "unit": "m" }
+      }
+    },
+    "PSCN": {
+      "description": "位置控制器北向：期望/目标/实际的位置-速度-加速度",
+      "affects": ["navigation"],
+      "fields": {
+        "DPN": { "description": "期望北向位置（米）", "unit": "m", "related": ["PSCN.PN"] },
+        "TPN": { "description": "目标北向位置（米）", "unit": "m" },
+        "PN": { "description": "实际北向位置（米）", "unit": "m" },
+        "DVN": { "description": "期望北向速度（m/s）", "unit": "m/s" },
+        "TVN": { "description": "目标北向速度（m/s）", "unit": "m/s" },
+        "VN": { "description": "实际北向速度（m/s）", "unit": "m/s" }
+      }
+    },
+    "PSCE": {
+      "description": "位置控制器东向：期望/目标/实际的位置-速度-加速度",
+      "affects": ["navigation"],
+      "fields": {
+        "DPE": { "description": "期望东向位置（米）", "unit": "m", "related": ["PSCE.PE"] },
+        "TPE": { "description": "目标东向位置（米）", "unit": "m" },
+        "PE": { "description": "实际东向位置（米）", "unit": "m" },
+        "DVE": { "description": "期望东向速度（m/s）", "unit": "m/s" },
+        "TVE": { "description": "目标东向速度（m/s）", "unit": "m/s" },
+        "VE": { "description": "实际东向速度（m/s）", "unit": "m/s" }
+      }
+    },
+    "PSCD": {
+      "description": "位置控制器垂直：期望/目标/实际的位置-速度-加速度",
+      "affects": ["altitude"],
+      "fields": {
+        "DPD": { "description": "期望垂直位置（米，向下为正）", "unit": "m" },
+        "PD": { "description": "实际垂直位置（米）", "unit": "m" },
+        "DVD": { "description": "期望垂直速度（m/s）", "unit": "m/s" },
+        "VD": { "description": "实际垂直速度（m/s）", "unit": "m/s" },
+        "DAD": { "description": "期望垂直加速度（m/s²）", "unit": "m/s/s" }
+      }
+    },
+    "PM": {
+      "description": "系统性能：主循环速率/超时计数/内存/CPU 负载",
+      "affects": ["system"],
+      "fields": {
+        "LR": { "description": "主循环速率（Hz）", "unit": "Hz" },
+        "NLon": { "description": "长循环（超时）计数——持续增长说明 CPU 跟不上", "unit": "count" },
+        "MaxT": { "description": "最大循环耗时（微秒）", "unit": "us" },
+        "Mem": { "description": "可用内存（字节）", "unit": "B" },
+        "Load": {
+          "description": "CPU 负载（%）——持续 >80% 有丢循环风险",
+          "unit": "percent",
+          "thresholds": [
+            { "level": "warning", "op": "gt", "value": 80 },
+            { "level": "critical", "op": "gt", "value": 95 }
+          ],
+          "affects": ["system"],
+          "analysis": [
+            { "condition": "Load 持续 >80% 且 NLon 增长", "meaning": "CPU 过载，控制循环被挤占" }
+          ]
+        },
+        "Ex": { "description": "为应对超时给每循环加的延时（us）", "unit": "us" },
+        "InE": { "description": "内部错误位掩码——非 0 即固件内部错误（含堆栈溢出/I2C 失败等位）", "unit": "bitmask" },
+        "ErC": { "description": "内部错误计数", "unit": "count" }
+      }
+    },
+    "POWR": {
+      "description": "系统电源：飞控板电压/舵机轨电压/电源标志",
+      "affects": ["power", "system"],
+      "fields": {
+        "Vcc": { "description": "飞控板电压（V）——掉落说明供电异常", "unit": "V" },
+        "VServo": { "description": "舵机轨电压（V）——为 0 或骤降说明舵机电源问题", "unit": "V" },
+        "Flags": { "description": "电源状态位（bit0 主电源有效 bit1 舵机有效 bit2 USB 供电 bit3/4 外设过流…）", "unit": "bitmask" },
+        "Safety": { "description": "硬件安全开关状态", "unit": "" }
+      }
+    },
+    "RPM": {
+      "description": "RPM 传感器（桨叶/发动机转速）",
+      "affects": ["power", "vibration"],
+      "fields": {
+        "RPM": {
+          "description": "转速（rpm）",
+          "unit": "rpm",
+          "analysis": [
+            { "condition": "RPM 波动大且伴随振动升高", "meaning": "桨不平衡或电机问题" }
+          ]
+        },
+        "Qual": { "description": "信号质量", "unit": "" },
+        "H": { "description": "健康标志（1=健康）", "unit": "bool" }
+      }
+    },
+    "ESC": {
+      "description": "电调遥测：转速/电压/电流/温度——定位单个电机问题",
+      "affects": ["power", "vibration"],
+      "fields": {
+        "RPM": { "description": "电机转速（rpm）", "unit": "rpm" },
+        "Volt": { "description": "电调输入电压（V）", "unit": "V" },
+        "Curr": { "description": "通过电调的电流（A）", "unit": "A" },
+        "Temp": { "description": "电调温度（℃）", "unit": "celsius" },
+        "MotTemp": { "description": "电机温度（℃）", "unit": "celsius" },
+        "CTot": { "description": "该电调累计消耗（mAh）", "unit": "mAh" },
+        "Err": { "description": "错误率", "unit": "percent" }
+      }
+    },
+    "RFND": {
+      "description": "测距仪（激光/超声）——定高/自动着陆的地面距离来源",
+      "affects": ["altitude", "landing"],
+      "fields": {
+        "Dist": {
+          "description": "测得距离（米）",
+          "unit": "m",
+          "affects": ["altitude"],
+          "analysis": [
+            { "condition": "Dist 突跳到极大值或 0", "meaning": "测距仪 glitch：地面反射差或超量程" }
+          ]
+        },
+        "Stat": { "description": "状态", "unit": "enum", "values": ["0=未连接","1=无数据","2=低于量程","3=超量程","4=正常","5=关闭"] },
+        "Quality": { "description": "信号质量（%）；-1 无效", "unit": "percent" }
+      }
+    },
+    "ARM": {
+      "description": "解锁/上锁状态变化：时间点、检查位与触发方式（失败原因看 ERR/EV）",
+      "affects": ["safety"],
+      "fields": {
+        "ArmState": { "description": "1=已解锁 0=已上锁", "unit": "bool" },
+        "ArmChecks": { "description": "解锁时启用的检查位掩码（bit1 BARO bit2 COMPASS bit3 GPS bit4 INS …）", "unit": "bitmask" },
+        "Forced": { "description": "1=强制解锁/上锁", "unit": "bool" },
+        "Method": { "description": "触发方式", "unit": "enum", "values": ["0=方向舵","1=MAVLink","2=辅助开关；上锁原因还有电池失效(7)/坠机(12)/RTL完成(28)/围栏(15)/失控保护(16) 等"], "analysis": [{"condition":"上锁 Method=坠机(12)","meaning":"飞控判定坠机强制上锁——重点排查失控段"},{"condition":"上锁 Method=电池失效(7)","meaning":"电压/电流触发电池失效保护"}] }
+      }
+    },
+    "MOTB": {
+      "description": "电机混控信息：电压补偿/油门限制/失败标志",
+      "affects": ["throttle", "power"],
+      "appliesTo": ["multirotor", "helicopter", "vtol"],
+      "fields": {
+        "ThrOut": { "description": "油门输出", "unit": "norm" },
+        "LiftMax": { "description": "最大升力补偿增益", "unit": "" },
+        "BatVolt": { "description": "当前电压/最大电压比", "unit": "norm" },
+        "ThLimit": { "description": "电流限制导致的油门限制", "unit": "norm" },
+        "ThrAvMx": { "description": "保持姿态控制可用的最大平均油门", "unit": "norm" },
+        "FailFlags": {
+          "description": "失败标志：bit0 电机失效，bit1 电机平衡；正常飞行应为 2",
+          "unit": "bitmask",
+          "analysis": [
+            { "condition": "FailFlags 的 bit1 为 0 或 bit0 为 1", "meaning": "电机输出失衡或失效——动力异常" }
+          ]
+        }
+      }
+    },
+    "LDET": {
+      "description": "着陆检测器状态位：判定在地面/在降落",
+      "affects": ["landing"],
+      "fields": {
+        "Flags": {
+          "description": "状态位：bit0 已着陆 bit1 可能着陆 bit2 降落中 bit4 已静止 bit5 测距<2m bit7 油门在下限…",
+          "unit": "bitmask",
+          "analysis": [
+            { "condition": "飞行中 bit0 反复跳变", "meaning": "着陆误判（振动大/推重比低），有空中误上锁风险" }
+          ]
+        },
+        "Count": { "description": "着陆判定通过计数", "unit": "count" }
+      }
+    },
+    "AHR2": {
+      "description": "备用 AHRS（DCM）姿态估计——与 EKF 差异大说明两者之一异常",
+      "affects": ["attitude"],
+      "fields": {
+        "Roll": { "description": "估计横滚（度）", "unit": "deg" },
+        "Pitch": { "description": "估计俯仰（度）", "unit": "deg" },
+        "Yaw": { "description": "估计偏航（度）", "unit": "deg" },
+        "Alt": { "description": "估计海拔高度（MSL，米）", "unit": "m" }
+      }
+    },
+    "RAD": {
+      "description": "数传电台链路统计",
+      "affects": ["link"],
+      "fields": {
+        "RSSI": {
+          "description": "本地接收信号强度",
+          "unit": "",
+          "analysis": [
+            { "condition": "RSSI 骤降且 TxBuf 增大", "meaning": "链路恶化，可能触发失控保护" }
+          ]
+        },
+        "RemRSSI": { "description": "对端报告的信号强度", "unit": "" },
+        "TxBuf": { "description": "发送缓冲区积压字节数——持续增长说明带宽不足", "unit": "B" },
+        "Noise": { "description": "本地噪声底", "unit": "" },
+        "RemNoise": { "description": "对端噪声底", "unit": "" },
+        "RxErrors": { "description": "损坏包计数", "unit": "count" }
+      }
+    },
+    "DSF": {
+      "description": "日志系统自身统计（写块/缓冲区）",
+      "affects": ["system"],
+      "fields": {
+        "Dp": { "description": "写拒绝次数", "unit": "count" },
+        "Blk": { "description": "当前块号", "unit": "" },
+        "Bytes": { "description": "当前写入偏移", "unit": "B" },
+        "FMn": { "description": "最小剩余缓冲（字节）——接近 0 说明日志掉数据", "unit": "B" }
+      }
+    },
+    "ARSP": {
+      "description": "空速传感器",
+      "affects": ["airspeed", "navigation"],
+      "appliesTo": ["fixedwing", "vtol"],
+      "fields": {
+        "Airspeed": {
+          "description": "空速（m/s）",
+          "unit": "m/s",
+          "analysis": [
+            { "condition": "Airspeed 与地速差长期异常", "meaning": "空速管堵塞/漏气或风速估计错" }
+          ]
+        },
+        "DiffPress": { "description": "动静压差（Pa）", "unit": "Pa" },
+        "Temp": { "description": "测量温度（℃）", "unit": "celsius" },
+        "TR": { "description": "新息测试比（>1 被拒绝）", "unit": "" },
+        "Pri": { "description": "主空速计编号（等于 I 表示本计为主）", "unit": "" }
+      }
+    },
+    "AOA": {
+      "description": "迎角与侧滑角（由空速/风矢量/速度矢量计算）",
+      "affects": ["airspeed"],
+      "appliesTo": ["fixedwing", "vtol"],
+      "fields": {
+        "AOA": { "description": "迎角（度）——接近失速迎角说明速度余量不足", "unit": "deg" },
+        "SSA": { "description": "侧滑角（度）", "unit": "deg" }
+      }
+    },
+    "TERR": {
+      "description": "地形数据库状态（地形跟随）",
+      "affects": ["altitude"],
+      "appliesTo": ["fixedwing", "vtol", "rover"],
+      "fields": {
+        "Status": { "description": "0=未启用 1=无数据 2=正常", "unit": "enum" },
+        "TerrH": { "description": "当前地形高度（米）", "unit": "m" },
+        "CHeight": { "description": "离地高度（米）", "unit": "m" },
+        "Pending": { "description": "未完成的瓦片请求数", "unit": "count" }
+      }
+    },
+    "SPOL": {
+      "description": "电机起转（spool）状态——起飞/降落阶段动力衔接",
+      "affects": ["throttle"],
+      "appliesTo": ["multirotor", "helicopter", "vtol"],
+      "fields": {
+        "Spl": { "description": "实际起转状态（0=停止 … 4=全速）", "unit": "enum" },
+        "SplDes": { "description": "期望起转状态", "unit": "enum" }
+      }
+    },
+    "THRO": {
+      "description": "抛飞（Throw）模式过程数据",
+      "affects": ["launch"],
+      "appliesTo": ["multirotor"],
+      "fields": {
+        "Stage": { "description": "抛飞阶段", "unit": "enum" },
+        "Vel": { "description": "速度矢量模（m/s）", "unit": "m/s" },
+        "Acc": { "description": "加速度矢量模（m/s²）", "unit": "m/s/s" }
+      }
+    },
+    "WIND": {
+      "description": "风向风速计读数（帆船/固定翼翱翔）",
+      "affects": ["navigation"],
+      "appliesTo": ["fixedwing", "rover", "boat"],
+      "fields": {
+        "SpdApp": { "description": "表观风速（m/s）", "unit": "m/s" },
+        "SpdTru": { "description": "真实风速（m/s）", "unit": "m/s" },
+        "DrApp": { "description": "表观风向（度，机体系）", "unit": "deg" },
+        "DrTru": { "description": "真实风向（度）", "unit": "deg" }
+      }
+    },
+    "EV": {
+      "description": "事件记录：解锁/上锁/自动微调成功/设置 HOME 等（具体见事件列表工具）",
+      "affects": ["events"]
+    },
+    "ERR": {
+      "description": "错误码记录：子系统+错误码（罗盘失败/失控保护/EKF 检查等，见错误列表工具）",
+      "affects": ["errors"]
+    },
+    "MODE": {
+      "description": "飞行模式变化与原因（RC/GCS 指令、各种失效保护触发）",
+      "affects": ["events"]
+    },
+    "MSG": {
+      "description": "飞控文本消息（banner 等）",
+      "affects": ["events"]
+    },
+    "PARM": {
+      "description": "参数记录（开机快照与运行时改动）",
+      "affects": ["parameters"]
+    },
+    "CMD": {
+      "description": "上传的任务命令（航点等）",
+      "affects": ["mission"]
+    },
+    "ORGN": {
+      "description": "导航原点/HOME 位置（经纬高）",
+      "affects": ["position"]
+    },
+    "VER": {
+      "description": "固件版本/板型信息",
+      "affects": ["system"]
+    }
+  }
+}

@@ -1,0 +1,6 @@
+// analysis 模块样式入口。原 _analysis.scss（~510 行名不副实的混合堆）已拆为按域小文件，
+// 跨模块共享类上移到 src/styles/_controls.scss，死规则（旧工具栏/统计区/Y 轴控制残骸）已删。
+@use 'toolbar';
+@use 'legend';
+@use 'toggles';
+@use 'chart';

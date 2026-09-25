@@ -1,0 +1,46 @@
+/** 3D scene domain: scene view, attitude card, WebGL errors, position debug panel, timeline and RC HUD. */
+export default {
+  scene: {
+    loadingTelemetry: 'Loading 3D telemetry...',
+    attitudeTitle: 'Current Attitude',
+    attitudeSourceTitle: 'Attitude data source',
+    compareTitle: 'Overlay a second attitude source (translucent ghost) against the main drone',
+    compare: 'Compare',
+    compareSourceTitle: 'Ghost drone attitude source',
+  },
+  webgl: {
+    moduleMissing: 'three.module.min.js failed to load (vendor/three.module.min.js may be 404 or corrupted); the 3D view is unavailable',
+    unsupported: 'This browser/WebView does not support WebGL — 3D cannot render. Use Chrome/Edge or enable hardware acceleration in browser settings.',
+    contextFailed: 'WebGL context creation failed (renderer degraded). Update GPU drivers or enable hardware acceleration, then retry.',
+    initFailed: '3D init failed: {err}',
+    attitudeUnsupported: 'This browser/WebView does not support WebGL — the attitude indicator is unavailable. Use Chrome/Edge or enable hardware acceleration.',
+  },
+  noGpsRoute: 'The current track has no GPS coordinates; mission route and waypoints cannot be overlaid',
+  debug: {
+    title: 'Position Debug',
+    hideTitle: 'Hide (reopen in Settings)',
+    time: 'Time',
+    rawLat: 'Raw Lat',
+    rawLng: 'Raw Lng',
+    rawAlt: 'Raw Alt',
+    rawPE: 'Raw PE (m)',
+    rawPN: 'Raw PN (m)',
+    convert: '↓ Convert',
+    note: 'Raw values use float32 (7-digit visible quantization step); XYZ use full-precision int32 (1 cm)',
+  },
+  timeline: {
+    pause: 'Pause',
+    play: 'Play',
+    dragHint: 'Drag/click to seek · {time}',
+  },
+  rc: {
+    title: 'RC Controller',
+    unrecognized: 'Unknown',
+    throttleYaw: 'Throttle / Yaw',
+    pitchRoll: 'Pitch / Roll',
+    roll: 'Roll',
+    pitch: 'Pitch',
+    throttle: 'Throttle',
+    yaw: 'Yaw',
+  },
+}

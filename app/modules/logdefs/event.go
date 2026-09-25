@@ -1,0 +1,78 @@
+package logdefs
+
+// eventLabels maps ArduPilot EV.Id values to human-readable event names.
+// 易误译/高频的飞行关键事件带中文译注（英文名在前保持可检索，模型与
+// 前端直接引用译注，避免把 DISARM 直译成"解锁"这类术语反转：
+// ARM=解锁、DISARM=加锁）。
+var eventLabels = map[int]string{
+	10:  "ARMED（解锁）",
+	11:  "DISARMED（加锁）",
+	15:  "AUTO_ARMED（自动解锁起飞）",
+	17:  "LAND_COMPLETE_MAYBE（可能已着陆）",
+	18:  "LAND_COMPLETE（着陆完成）",
+	19:  "LOST_GPS（GPS 失锁）",
+	21:  "FLIP_START",
+	22:  "FLIP_END",
+	25:  "SET_HOME（设定 Home 点）",
+	26:  "SET_SIMPLE_ON",
+	27:  "SET_SIMPLE_OFF",
+	28:  "NOT_LANDED（已离地）",
+	29:  "SET_SUPERSIMPLE_ON",
+	30:  "AUTOTUNE_INITIALISED",
+	31:  "AUTOTUNE_OFF",
+	32:  "AUTOTUNE_RESTART",
+	33:  "AUTOTUNE_SUCCESS",
+	34:  "AUTOTUNE_FAILED",
+	35:  "AUTOTUNE_REACHED_LIMIT",
+	36:  "AUTOTUNE_PILOT_TESTING",
+	37:  "AUTOTUNE_SAVEDGAINS",
+	38:  "SAVE_TRIM",
+	39:  "SAVEWP_ADD_WP",
+	41:  "FENCE_ENABLE（围栏启用）",
+	42:  "FENCE_DISABLE（围栏停用）",
+	43:  "ACRO_TRAINER_OFF",
+	44:  "ACRO_TRAINER_LEVELING",
+	45:  "ACRO_TRAINER_LIMITED",
+	46:  "GRIPPER_GRAB",
+	47:  "GRIPPER_RELEASE",
+	49:  "PARACHUTE_DISABLED",
+	50:  "PARACHUTE_ENABLED",
+	51:  "PARACHUTE_RELEASED（降落伞已释放）",
+	52:  "LANDING_GEAR_DEPLOYED（起落架已放下）",
+	53:  "LANDING_GEAR_RETRACTED（起落架已收起）",
+	54:  "MOTORS_EMERGENCY_STOPPED（电机急停）",
+	55:  "MOTORS_EMERGENCY_STOP_CLEARED（电机急停解除）",
+	56:  "MOTORS_INTERLOCK_DISABLED",
+	57:  "MOTORS_INTERLOCK_ENABLED",
+	58:  "ROTOR_RUNUP_COMPLETE（旋翼加速完成）",
+	59:  "ROTOR_SPEED_BELOW_CRITICAL（旋翼低于临界转速）",
+	60:  "EKF_ALT_RESET（EKF 高度复位）",
+	61:  "LAND_CANCELLED_BY_PILOT（飞行员取消着陆）",
+	62:  "EKF_YAW_RESET（EKF 航向复位）",
+	63:  "AVOIDANCE_ADSB_ENABLE",
+	64:  "AVOIDANCE_ADSB_DISABLE",
+	65:  "AVOIDANCE_PROXIMITY_ENABLE",
+	66:  "AVOIDANCE_PROXIMITY_DISABLE",
+	67:  "GPS_PRIMARY_CHANGED（GPS 主从切换）",
+	71:  "ZIGZAG_STORE_A",
+	72:  "ZIGZAG_STORE_B",
+	73:  "LAND_REPO_ACTIVE",
+	74:  "STANDBY_ENABLE",
+	75:  "STANDBY_DISABLE",
+	80:  "FENCE_FLOOR_ENABLE",
+	81:  "FENCE_FLOOR_DISABLE",
+	85:  "EK3_SOURCES_SET_TO_PRIMARY（EK3 源切主）",
+	86:  "EK3_SOURCES_SET_TO_SECONDARY（EK3 源切备）",
+	87:  "EK3_SOURCES_SET_TO_TERTIARY（EK3 源切第三）",
+	90:  "AIRSPEED_PRIMARY_CHANGED（空速计主从切换）",
+	163: "SURFACED",
+	164: "NOT_SURFACED",
+	165: "BOTTOMED",
+	166: "NOT_BOTTOMED",
+}
+
+// EventName resolves a single event id, returning "" when unknown.
+func EventName(id int) string { return eventLabels[id] }
+
+// EventLabels returns the full event-id → name table for bulk display.
+func EventLabels() map[int]string { return eventLabels }

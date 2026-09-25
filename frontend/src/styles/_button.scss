@@ -1,0 +1,68 @@
+// AppButton 的自有类族。
+// 刻意用【全局】类（非 <style scoped>）：scoped 会注入 [data-v] 属性选择器抬高优先级，
+// 压过现存上下文覆盖（如 .chart-toolbar .open-file-btn { gap:5px }）。全局类与其它全局类
+// 优先级一致（均 0,1,0），靠来源顺序/特异性自然级联。视觉对照 _base.scss 的旧 .btn 家族复刻。
+.app-btn {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s, border-color 0.14s, color 0.14s, box-shadow 0.14s, transform 0.06s;
+
+  &:hover { background: var(--surface-strong); border-color: #c8d2de; }
+  &:active { transform: translateY(0.5px); }
+  &:disabled { cursor: not-allowed; opacity: 0.55; }
+}
+
+.app-btn.is-primary {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+  &:hover { background: var(--blue-strong); border-color: var(--blue-strong); box-shadow: var(--shadow); }
+}
+
+.app-btn.is-danger { color: var(--red); }
+.app-btn.is-danger:hover { background: #fff1f2; border-color: #fecaca; }
+
+.app-btn.is-xs { height: 24px; padding: 0 8px; font-size: 11px; }
+
+// 带边框方形图标按钮（对应旧 .btn-icon-only，28×28）。
+.app-btn.is-icon-only {
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+}
+
+// 透明幽灵图标按钮（对应旧 .btn-icon，24×24 无边框，hover 变红）。
+.app-btn.is-ghost {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  gap: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text3);
+  font-size: 12px;
+  &:hover {
+    background: #fff1f2;
+    border-color: #fecaca;
+    color: var(--red);
+  }
+  &.is-danger { color: var(--red); }
+}
+
+.app-btn.is-active { background: var(--surface-strong); border-color: #c8d2de; }
